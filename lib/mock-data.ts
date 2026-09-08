@@ -29,7 +29,13 @@ function isoNow(): string {
   return new Date().toISOString();
 }
 
+export interface OrgCredits {
+  sms: number;
+  voiceMinutes: number;
+}
+
 export interface MockDatabase {
+  orgCredits: OrgCredits;
   campaigns: Campaign[];
   contacts: Contact[];
   participants: CampaignParticipant[];
@@ -484,6 +490,7 @@ export function buildInitialDatabase(): MockDatabase {
   });
 
   return {
+    orgCredits: { sms: 4180, voiceMinutes: 860 },
     campaigns: [campaignHexia, campaignNorthwind, campaignBexley],
     contacts,
     participants,

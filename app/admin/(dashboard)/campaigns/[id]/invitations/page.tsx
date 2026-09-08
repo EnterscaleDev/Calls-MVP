@@ -11,7 +11,7 @@ import { Modal } from "@/components/ui/Modal";
 import { InlineBanner, EmptyState } from "@/components/ui/States";
 import { InvitationStatusBadge } from "@/components/ui/Badge";
 import { formatDateTime, formatPercent } from "../../../_lib/format";
-import { MOCK_SMS_CREDITS, SMS_CREDIT_COST_PER_SEGMENT } from "../../../_lib/credits";
+import { SMS_CREDIT_COST_PER_SEGMENT } from "../../../_lib/credits";
 import { useCampaignDetail } from "../campaign-context";
 
 const DEFAULT_BODY =
@@ -73,7 +73,7 @@ export default function InvitationsPage() {
     ["declined", "invite_failed", "ineligible"].includes(p.participationStatus)
   ).length;
   const estimatedCost = eligibleCount * segments * SMS_CREDIT_COST_PER_SEGMENT;
-  const creditAfterSend = MOCK_SMS_CREDITS - estimatedCost;
+  const creditAfterSend = db.orgCredits.sms - estimatedCost;
 
   const sendHistory = useMemo(
     () => getAuditLog(db, campaign.id).filter((e) => e.action === "sms_batch_sent"),

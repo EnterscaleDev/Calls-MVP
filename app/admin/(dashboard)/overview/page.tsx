@@ -3,23 +3,46 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
+import { useAdminSession } from "@/lib/auth";
 import { getCampaignFunnel, getCampaignMetrics } from "@/lib/selectors";
 import { LoadingScreen, InlineBanner } from "@/components/ui/States";
 import { Card, CardHeader, CardBody, StatCard } from "@/components/ui/Card";
 import { CampaignStatusBadge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
 import { ProgressBar } from "@/components/ui/Progress";
 import { formatPercent, isToday } from "../_lib/format";
-import { MOCK_SMS_CREDITS, MOCK_VOICE_MINUTES } from "../_lib/credits";
+import { SMS_TOP_UP_PACKAGES, VOICE_TOP_UP_PACKAGES, type TopUpPackage } from "../_lib/credits";
 import type { AssignmentStatus } from "@/lib/types";
 
 const ACTIVE_ASSIGNMENT_STATUSES: AssignmentStatus[] = ["assigned", "in_progress", "completed"];
 
 export default function AdminOverviewPage() {
-  const { ready, db } = useStore();
-  const [showBillingNotice, setShowBillingNotice] = useState(false);
+  const { ready, db, actions } = useStore();
+  const { session } = useAdminSession();
+  const actor = session?.name ?? "Toni";
+  const [topUpOpen, setTopUpOpen] = useState(false);
+  const [topUpKind, setTopUpKind] = useState<"sms" | "voice">("sms");
+  const [selectedPackageId, setSelectedPackageId] = useState(SMS_TOP_UP_PACKAGES[0].id);
+  const [topUpSuccess, setTopUpSuccess] = useState("");
 
   if (!ready) return <LoadingScreen label="Loading overview..." />;
+
+  const packages = topUpKind === "sms" ? SMS_TOP_UP_PACKAGES : VOICE_TOP_UP_PACKAGES;
+  const selectedPackage: TopUpPackage =
+    packages.find((p) => p.id === selectedPackageId) ?? packages[0];
+
+  function openTopUp(kind: "sms" | "voice") {
+    setTopUpKind(kind);
+    setSelectedPackageId((kind === "sms" ? SMS_TOP_UP_PACKAGES : VOICE_TOP_UP_PACKAGES)[0].id);
+    setTopUpSuccess("");
+    setTopUpOpen(true);
+  }
+
+  function handleConfirmTopUp() {
+    actions.topUpCredits(topUpKind, selectedPackage.amount, actor);
+    setTopUpSuccess(`Added ${selectedPackage.label.toLowerCase()}.`);
+  }
 
   const campaigns = db.campaigns;
   const activeCampaigns = campaigns.filter((c) => c.status === "active").length;
@@ -140,8 +163,8 @@ export default function AdminOverviewPage() {
       <div className="md:max-w-sm">
         <StatCard
           label="SMS & voice credits"
-          value={`${MOCK_SMS_CREDITS.toLocaleString()} SMS`}
-          hint={`${MOCK_VOICE_MINUTES.toLocaleString()} voice minutes remaining`}
+          value={`${db.orgCredits.sms.toLocaleString()} SMS`}
+          hint={`${db.orgCredits.voiceMinutes.toLocaleString()} voice minutes remaining`}
           tone="hero"
         >
           <div className="mt-3">
@@ -151,20 +174,50 @@ export default function AdminOverviewPage() {
             </div>
             <ProgressBar value={0.62} tone="info" className="mt-1.5" />
           </div>
-          <Button
-            size="sm"
-            className="mt-4"
-            onClick={() => setShowBillingNotice(true)}
-          >
-            Top up
-          </Button>
-          {showBillingNotice ? (
-            <div className="mt-3">
-              <InlineBanner kind="info">Billing isn&apos;t connected in this preview.</InlineBanner>
-            </div>
-          ) : null}
+          <div className="mt-4 flex gap-2">
+            <Button size="sm" onClick={() => openTopUp("sms")}>
+              Top up SMS
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => openTopUp("voice")}>
+              Top up voice
+            </Button>
+          </div>
         </StatCard>
       </div>
+
+      <Modal
+        open={topUpOpen}
+        onClose={() => setTopUpOpen(false)}
+        title={`Top up ${topUpKind === "sms" ? "SMS" : "voice"} credits`}
+        description="A mock top-up for this preview — there's no real payment provider connected, so nothing is charged. It just adds credits to keep testing sends and calls."
+      >
+        <div className="flex flex-col gap-4">
+          {topUpSuccess ? <InlineBanner kind="success">{topUpSuccess}</InlineBanner> : null}
+          <div className="flex flex-col gap-2">
+            {packages.map((pkg) => (
+              <label
+                key={pkg.id}
+                className="flex cursor-pointer items-center gap-2.5 rounded-[6px] border border-border px-3 py-2.5 text-sm has-[:checked]:border-primary has-[:checked]:bg-primary-soft"
+              >
+                <input
+                  type="radio"
+                  name="top-up-package"
+                  className="accent-primary"
+                  checked={selectedPackageId === pkg.id}
+                  onChange={() => setSelectedPackageId(pkg.id)}
+                />
+                {pkg.label}
+              </label>
+            ))}
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setTopUpOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={handleConfirmTopUp}>Add credits (mock)</Button>
+          </div>
+        </div>
+      </Modal>
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Active campaigns" value={activeCampaigns} />

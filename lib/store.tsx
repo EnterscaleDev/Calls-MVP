@@ -65,6 +65,7 @@ interface StoreContextValue {
     updateCampaignStatus: (campaignId: string, status: CampaignStatus, actor?: string) => void;
     updateCampaignRecording: (campaignId: string, recordingEnabled: boolean, actor?: string) => void;
     revealContactNumbers: (campaignId: string, actor?: string) => void;
+    topUpCredits: (kind: "sms" | "voice", amount: number, actor?: string) => void;
     importContacts: (
       campaignId: string,
       rows: ParsedContactRow[],
@@ -130,7 +131,10 @@ function loadFromStorage(): MockDatabase | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as MockDatabase;
+    const parsed = JSON.parse(raw) as MockDatabase;
+    // Backfill fields added after some sessions already had data saved.
+    if (!parsed.orgCredits) parsed.orgCredits = { sms: 4180, voiceMinutes: 860 };
+    return parsed;
   } catch {
     return null;
   }
@@ -222,6 +226,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             entityType: "campaign",
             entityId: campaignId,
             metadata: { status },
+            createdAt: new Date().toISOString(),
+          }
+        )
+      );
+    },
+    [update, addAudit]
+  );
+
+  const topUpCredits = useCallback(
+    (kind: "sms" | "voice", amount: number, actor = "Toni") => {
+      update((prev) =>
+        addAudit(
+          {
+            ...prev,
+            orgCredits: {
+              ...prev.orgCredits,
+              sms: kind === "sms" ? prev.orgCredits.sms + amount : prev.orgCredits.sms,
+              voiceMinutes:
+                kind === "voice" ? prev.orgCredits.voiceMinutes + amount : prev.orgCredits.voiceMinutes,
+            },
+          },
+          {
+            actorType: "admin",
+            actorName: actor,
+            action: "credits_topped_up",
+            entityType: "organisation",
+            entityId: ORG_ID,
+            metadata: { kind, amount },
             createdAt: new Date().toISOString(),
           }
         )
@@ -1052,6 +1084,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           updateCampaignStatus,
           updateCampaignRecording,
           revealContactNumbers,
+          topUpCredits,
           importContacts,
           saveSmsDraft,
           sendInvitations,

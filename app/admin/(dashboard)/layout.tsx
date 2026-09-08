@@ -16,9 +16,9 @@ import {
   Mic,
 } from "lucide-react";
 import { clearAdminSession, useAdminSession } from "@/lib/auth";
+import { useStore } from "@/lib/store";
 import { LoadingScreen } from "@/components/ui/States";
 import { cn } from "@/lib/cn";
-import { MOCK_SMS_CREDITS, MOCK_VOICE_MINUTES } from "./_lib/credits";
 
 const NAV = [
   { href: "/admin/overview", label: "Overview", icon: LayoutDashboard },
@@ -32,13 +32,14 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
   const router = useRouter();
   const pathname = usePathname();
   const { ready, session } = useAdminSession();
+  const { ready: storeReady, db } = useStore();
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     if (ready && !session) router.replace("/admin/login");
   }, [ready, session, router]);
 
-  if (!ready || !session) return <LoadingScreen label="Checking your session..." />;
+  if (!ready || !session || !storeReady) return <LoadingScreen label="Checking your session..." />;
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -79,11 +80,11 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
           <div className="flex items-center gap-2">
             <span className="hidden items-center gap-1.5 rounded-[5px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-foreground sm:inline-flex">
               <MessageSquare size={13} className="text-foreground-subtle" />
-              {MOCK_SMS_CREDITS.toLocaleString()}
+              {db.orgCredits.sms.toLocaleString()}
             </span>
             <span className="hidden items-center gap-1.5 rounded-[5px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-foreground sm:inline-flex">
               <Mic size={13} className="text-foreground-subtle" />
-              {MOCK_VOICE_MINUTES.toLocaleString()}
+              {db.orgCredits.voiceMinutes.toLocaleString()}
             </span>
             <button
               type="button"

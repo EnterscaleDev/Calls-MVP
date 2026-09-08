@@ -21,6 +21,7 @@ function describeAction(action: string): string {
     campaign_status_changed: "Status changed",
     campaign_recording_setting_changed: "Recording setting changed",
     contact_numbers_revealed: "Contact numbers revealed",
+    credits_topped_up: "Credits topped up",
     contacts_imported: "Contacts imported",
     invitation_sent: "Invitation sent",
     sms_batch_sent: "SMS batch sent",
