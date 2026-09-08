@@ -269,6 +269,41 @@ export function getAvailableSlots(campaign: Campaign, count = 5): { start: Date;
   return slots;
 }
 
+export interface AgentProfileStats {
+  assignedToday: number;
+  completedToday: number;
+  completedThisWeek: number;
+  completionRate: number;
+}
+
+/** Richer per-agent stats for the agent profile modal — today, this week, and an all-time completion rate. */
+export function getAgentProfileStats(db: MockDatabase, agentId: string): AgentProfileStats {
+  const now = new Date();
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfWeek = new Date(startOfToday);
+  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+
+  const attempts = db.callAttempts.filter((a) => a.agentId === agentId && a.status === "ended");
+  const assignedToday = db.assignments.filter(
+    (a) => a.agentId === agentId && new Date(a.assignedAt) >= startOfToday
+  ).length;
+  const completedToday = attempts.filter(
+    (a) => a.disposition === "completed" && new Date(a.startedAt) >= startOfToday
+  ).length;
+  const completedThisWeek = attempts.filter(
+    (a) => a.disposition === "completed" && new Date(a.startedAt) >= startOfWeek
+  ).length;
+  const completedAllTime = attempts.filter((a) => a.disposition === "completed").length;
+
+  return {
+    assignedToday: Math.max(assignedToday, completedToday),
+    completedToday,
+    completedThisWeek,
+    completionRate: attempts.length > 0 ? completedAllTime / attempts.length : 0,
+  };
+}
+
 export function listAgentsWithStats(db: MockDatabase) {
   return db.agents.map((agent) => {
     const campaignIds = new Set(

@@ -98,6 +98,7 @@ interface StoreContextValue {
     setAgentStatus: (agentId: string, status: AgentStatus) => void;
     attachAgentToCampaign: (campaignId: string, agentId: string, dailyTarget: number, actor?: string) => void;
     updateCampaignAgentTarget: (campaignAgentId: string, dailyTarget: number) => void;
+    detachAgentFromCampaign: (campaignAgentId: string, actor?: string) => void;
     assignParticipant: (
       campaignId: string,
       participantId: string,
@@ -661,6 +662,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [update]
   );
 
+  const detachAgentFromCampaign = useCallback(
+    (campaignAgentId: string, actor = "Toni") => {
+      update((prev) => {
+        const campaignAgent = prev.campaignAgents.find((ca) => ca.id === campaignAgentId);
+        if (!campaignAgent) return prev;
+        return addAudit(
+          {
+            ...prev,
+            campaignAgents: prev.campaignAgents.filter((ca) => ca.id !== campaignAgentId),
+          },
+          {
+            campaignId: campaignAgent.campaignId,
+            actorType: "admin",
+            actorName: actor,
+            action: "agent_detached_from_campaign",
+            entityType: "campaign_agent",
+            entityId: campaignAgentId,
+            metadata: { agentId: campaignAgent.agentId },
+            createdAt: new Date().toISOString(),
+          }
+        );
+      });
+    },
+    [update, addAudit]
+  );
+
   const assignParticipant = useCallback(
     (campaignId: string, participantId: string, agentId: string, actor: string) => {
       update((prev) => {
@@ -989,6 +1016,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setAgentStatus,
           attachAgentToCampaign,
           updateCampaignAgentTarget,
+          detachAgentFromCampaign,
           assignParticipant,
           reassignParticipant,
           startCallAttempt,

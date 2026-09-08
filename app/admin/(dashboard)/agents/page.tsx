@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import { AgentStatusBadge } from "@/components/ui/Badge";
-import type { AgentStatus } from "@/lib/types";
+import { AgentProfileModal } from "./AgentProfileModal";
+import type { AgentProfile, AgentStatus } from "@/lib/types";
 
 export default function AgentsPage() {
   const { ready, db, actions } = useStore();
@@ -20,6 +21,7 @@ export default function AgentsPage() {
   const [campaignId, setCampaignId] = useState("");
   const [dailyTarget, setDailyTarget] = useState("8");
   const [error, setError] = useState("");
+  const [profileAgent, setProfileAgent] = useState<AgentProfile | null>(null);
 
   if (!ready) return <LoadingScreen label="Loading agents..." />;
 
@@ -86,7 +88,11 @@ export default function AgentsPage() {
                 </thead>
                 <tbody>
                   {agentStats.map(({ agent, campaignNames, callsToday, completedToday }) => (
-                    <tr key={agent.id} className="border-b border-border last:border-0">
+                    <tr
+                      key={agent.id}
+                      onClick={() => setProfileAgent(agent)}
+                      className="cursor-pointer border-b border-border last:border-0 hover:bg-surface-muted"
+                    >
                       <td className="px-5 py-3 font-medium text-foreground">{agent.name}</td>
                       <td className="px-5 py-3 text-foreground-muted">{agent.email}</td>
                       <td className="px-5 py-3">
@@ -101,7 +107,10 @@ export default function AgentsPage() {
                         {agent.status !== "invited" ? (
                           <button
                             type="button"
-                            onClick={() => toggleStatus(agent.id, agent.status)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleStatus(agent.id, agent.status);
+                            }}
                             className="text-xs font-medium text-primary hover:underline"
                           >
                             {agent.status === "active" ? "Mark inactive" : "Mark active"}
@@ -149,6 +158,8 @@ export default function AgentsPage() {
           </div>
         </form>
       </Modal>
+
+      <AgentProfileModal agent={profileAgent} onClose={() => setProfileAgent(null)} />
     </div>
   );
 }
