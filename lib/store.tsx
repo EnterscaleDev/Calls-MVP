@@ -63,6 +63,8 @@ interface StoreContextValue {
   actions: {
     createCampaign: (input: CampaignInput) => Campaign;
     updateCampaignStatus: (campaignId: string, status: CampaignStatus, actor?: string) => void;
+    updateCampaignRecording: (campaignId: string, recordingEnabled: boolean, actor?: string) => void;
+    revealContactNumbers: (campaignId: string, actor?: string) => void;
     importContacts: (
       campaignId: string,
       rows: ParsedContactRow[],
@@ -220,6 +222,49 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             entityType: "campaign",
             entityId: campaignId,
             metadata: { status },
+            createdAt: new Date().toISOString(),
+          }
+        )
+      );
+    },
+    [update, addAudit]
+  );
+
+  const revealContactNumbers = useCallback(
+    (campaignId: string, actor = "Toni") => {
+      update((prev) =>
+        addAudit(prev, {
+          campaignId,
+          actorType: "admin",
+          actorName: actor,
+          action: "contact_numbers_revealed",
+          entityType: "campaign",
+          entityId: campaignId,
+          createdAt: new Date().toISOString(),
+        })
+      );
+    },
+    [update, addAudit]
+  );
+
+  const updateCampaignRecording = useCallback(
+    (campaignId: string, recordingEnabled: boolean, actor = "Toni") => {
+      update((prev) =>
+        addAudit(
+          {
+            ...prev,
+            campaigns: prev.campaigns.map((c) =>
+              c.id === campaignId ? { ...c, recordingEnabled, updatedAt: new Date().toISOString() } : c
+            ),
+          },
+          {
+            campaignId,
+            actorType: "admin",
+            actorName: actor,
+            action: "campaign_recording_setting_changed",
+            entityType: "campaign",
+            entityId: campaignId,
+            metadata: { recordingEnabled },
             createdAt: new Date().toISOString(),
           }
         )
@@ -1005,6 +1050,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         actions: {
           createCampaign,
           updateCampaignStatus,
+          updateCampaignRecording,
+          revealContactNumbers,
           importContacts,
           saveSmsDraft,
           sendInvitations,

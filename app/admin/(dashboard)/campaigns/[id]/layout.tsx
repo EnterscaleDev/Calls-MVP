@@ -46,6 +46,7 @@ export default function CampaignDetailLayout({
     { href: `/admin/campaigns/${id}/agents`, label: "Agents" },
     { href: `/admin/campaigns/${id}/call-script`, label: "Call Script" },
     { href: `/admin/campaigns/${id}/call-activity`, label: "Call Activity" },
+    { href: `/admin/campaigns/${id}/settings`, label: "Settings" },
   ];
 
   return (
