@@ -40,6 +40,8 @@ export default function InvitationsPage() {
       .replaceAll("{{campaign_link}}", "https://calls.example/i/abc123");
   }, [body]);
 
+  const previewSegments = estimateSegments(previewText);
+
   const invitationRows = useMemo(() => {
     return [...db.invitations]
       .filter((inv) => inv.campaignId === campaign.id)
@@ -94,7 +96,7 @@ export default function InvitationsPage() {
             </Field>
             <Field
               label="Message body"
-              hint={`${body.length} characters · ~${segments} SMS segment${segments === 1 ? "" : "s"}`}
+              hint={`${body.length} characters in the template (placeholders included) · ~${segments} SMS segment${segments === 1 ? "" : "s"} before substitution — see Preview for the actual sent length`}
             >
               <Textarea rows={5} value={body} onChange={(e) => setBody(e.target.value)} />
             </Field>
@@ -123,7 +125,12 @@ export default function InvitationsPage() {
 
         <Card>
           <CardHeader title="Preview" description="How this looks with a real participant's details filled in." />
-          <CardBody>
+          <CardBody className="flex flex-col gap-3">
+            <p className={`text-xs font-medium ${previewSegments > 1 ? "text-warning" : "text-foreground-muted"}`}>
+              {previewText.length} character{previewText.length === 1 ? "" : "s"} · ~{previewSegments} SMS segment
+              {previewSegments === 1 ? "" : "s"}
+              {previewSegments > 1 ? " — over the 160-character single-segment limit" : ""}
+            </p>
             <div className="rounded-[8px] border border-border bg-surface-muted p-4 text-sm text-foreground">
               <p className="mb-1 text-xs font-medium uppercase tracking-wide text-foreground-subtle">
                 From: {senderId || "SENDER"}
