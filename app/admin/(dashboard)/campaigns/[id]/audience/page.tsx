@@ -54,11 +54,9 @@ export default function AudiencePage() {
   );
 
   function handleToggleReveal() {
-    setRevealed((prev) => {
-      const next = !prev;
-      if (next) actions.revealContactNumbers(campaign.id, actor);
-      return next;
-    });
+    const next = !revealed;
+    if (next) actions.revealContactNumbers(campaign.id, actor);
+    setRevealed(next);
   }
 
   function handleExport() {
