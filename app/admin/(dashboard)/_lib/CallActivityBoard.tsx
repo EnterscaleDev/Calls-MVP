@@ -2,10 +2,12 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { Download } from "lucide-react";
 import type { MockDatabase } from "@/lib/mock-data";
 import { getCallAttemptsForCampaign, getRecordingForAttempt, getCampaign } from "@/lib/selectors";
-import { Card, CardBody, StatCard } from "@/components/ui/Card";
+import { Card, CardHeader, CardBody, StatCard } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Form";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/States";
 import { OutcomeBadge, Badge } from "@/components/ui/Badge";
 import { formatDateTime, formatDuration, safeDiv, formatPercent, isToday, labelize } from "./format";
@@ -102,6 +104,46 @@ export function CallActivityBoard({
     return true;
   });
 
+  const outcomeMix = useMemo(() => {
+    const counts = new Map<CallOutcome, number>();
+    for (const row of filteredRows) {
+      if (!row.outcome) continue;
+      counts.set(row.outcome, (counts.get(row.outcome) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [filteredRows]);
+
+  function handleExport() {
+    const header = "Participant,Campaign,Agent,Scheduled,Attempts,Last Call,Outcome,Duration,Recording,Notes\n";
+    const body = filteredRows
+      .map((r) =>
+        [
+          r.contactName,
+          r.campaignName ?? "",
+          r.agentName,
+          formatDateTime(r.scheduledStart),
+          r.attemptCount,
+          formatDateTime(r.lastAttempt?.startedAt),
+          r.outcome ?? "",
+          formatDuration(r.duration),
+          r.recording?.status ?? "",
+          r.notes ?? "",
+        ]
+          .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+    const blob = new Blob([header + body], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "call-activity.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
   const outcomeValues: CallOutcome[] = [
     "completed",
     "no_answer",
@@ -127,7 +169,8 @@ export function CallActivityBoard({
       </div>
 
       <Card>
-        <CardBody className="flex flex-wrap items-end gap-3">
+        <CardBody className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs font-medium text-foreground-muted">
             Agent
             <Select value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)} className="w-40">
@@ -170,8 +213,35 @@ export function CallActivityBoard({
               </Select>
             </label>
           ) : null}
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Download size={14} />}
+            onClick={handleExport}
+            disabled={filteredRows.length === 0}
+          >
+            Export {filteredRows.length} row{filteredRows.length === 1 ? "" : "s"}
+          </Button>
         </CardBody>
       </Card>
+
+      {outcomeMix.length > 0 ? (
+        <Card>
+          <CardHeader
+            title="Outcome mix"
+            description={`By most recent attempt · ${filteredRows.length} participant${filteredRows.length === 1 ? "" : "s"}`}
+          />
+          <CardBody className="flex flex-wrap gap-x-6 gap-y-2">
+            {outcomeMix.map(([outcome, count]) => (
+              <div key={outcome} className="flex items-center gap-2">
+                <OutcomeBadge outcome={outcome} />
+                <span className="text-sm font-semibold tabular-nums text-foreground">{count}</span>
+              </div>
+            ))}
+          </CardBody>
+        </Card>
+      ) : null}
 
       <Card>
         <CardBody className="p-0">

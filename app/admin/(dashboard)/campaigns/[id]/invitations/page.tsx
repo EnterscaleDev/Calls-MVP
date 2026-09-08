@@ -2,12 +2,16 @@
 
 import { useMemo, useState } from "react";
 import { useStore, estimateSegments } from "@/lib/store";
-import { Card, CardHeader, CardBody } from "@/components/ui/Card";
+import { useAdminSession } from "@/lib/auth";
+import { getAuditLog } from "@/lib/selectors";
+import { Card, CardHeader, CardBody, StatCard } from "@/components/ui/Card";
 import { Field, Input, Textarea } from "@/components/ui/Form";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { InlineBanner, EmptyState } from "@/components/ui/States";
 import { InvitationStatusBadge } from "@/components/ui/Badge";
+import { formatDateTime, formatPercent } from "../../../_lib/format";
+import { MOCK_SMS_CREDITS, SMS_CREDIT_COST_PER_SEGMENT } from "../../../_lib/credits";
 import { useCampaignDetail } from "../campaign-context";
 
 const DEFAULT_BODY =
@@ -16,6 +20,8 @@ const DEFAULT_BODY =
 export default function InvitationsPage() {
   const campaign = useCampaignDetail();
   const { db, actions } = useStore();
+  const { session } = useAdminSession();
+  const actor = session?.name ?? "Toni";
 
   const [senderId, setSenderId] = useState(campaign.senderId);
   const [body, setBody] = useState(DEFAULT_BODY);
@@ -54,6 +60,25 @@ export default function InvitationsPage() {
   }, [db.invitations, db.participants, db.contacts, campaign.id]);
 
   const failedCount = invitationRows.filter((r) => r.invitation.status === "failed").length;
+  const queuedCount = invitationRows.filter((r) => r.invitation.status === "queued").length;
+  const sentTotal = invitationRows.length;
+  const deliveredCount = invitationRows.filter((r) => r.invitation.status === "delivered").length;
+  const deliveryRate = sentTotal > 0 ? deliveredCount / sentTotal : 0;
+  const optedInCount = participants.filter((p) =>
+    ["opted_in", "scheduled", "completed"].includes(p.participationStatus)
+  ).length;
+  const optedInRateOfDelivered = deliveredCount > 0 ? optedInCount / deliveredCount : 0;
+
+  const excludedCount = participants.filter((p) =>
+    ["declined", "invite_failed", "ineligible"].includes(p.participationStatus)
+  ).length;
+  const estimatedCost = eligibleCount * segments * SMS_CREDIT_COST_PER_SEGMENT;
+  const creditAfterSend = MOCK_SMS_CREDITS - estimatedCost;
+
+  const sendHistory = useMemo(
+    () => getAuditLog(db, campaign.id).filter((e) => e.action === "sms_batch_sent"),
+    [db, campaign.id]
+  );
 
   function handleSaveDraft() {
     actions.saveSmsDraft(campaign.id, body, incentiveText, senderId);
@@ -70,7 +95,7 @@ export default function InvitationsPage() {
     setSending(true);
     setSendError("");
     try {
-      const summary = await actions.sendInvitations(campaign.id, body, senderId);
+      const summary = await actions.sendInvitations(campaign.id, body, senderId, actor);
       setSentBanner(`Sent to ${summary.sent} of ${summary.eligible} eligible participant${summary.eligible === 1 ? "" : "s"}.`);
       setConfirmOpen(false);
     } catch {
@@ -82,6 +107,14 @@ export default function InvitationsPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <StatCard label="Queued" value={queuedCount} />
+        <StatCard label="Sent" value={sentTotal} />
+        <StatCard label="Delivered" value={deliveredCount} hint={`${formatPercent(deliveryRate)} delivery rate`} />
+        <StatCard label="Failed" value={failedCount} hint="Unreachable or barred" tone={failedCount > 0 ? "danger" : "default"} />
+        <StatCard label="Opted in" value={optedInCount} hint={`${formatPercent(optedInRateOfDelivered)} of delivered`} />
+      </div>
+
       <div className="grid gap-6 lg:grid-cols-[1.3fr_1fr]">
         <Card>
           <CardHeader title="Compose invitation" description="Supports {{first_name}} and {{campaign_link}} placeholders." />
@@ -143,6 +176,53 @@ export default function InvitationsPage() {
           </CardBody>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader title="Audience & cost" description="Estimated for this send, using the current message." />
+        <CardBody>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
+            <div>
+              <p className="label-caps text-foreground-subtle">Eligible</p>
+              <p className="mt-0.5 font-semibold text-foreground">{eligibleCount} contacts</p>
+            </div>
+            <div>
+              <p className="label-caps text-foreground-subtle">Excluded</p>
+              <p className="mt-0.5 font-semibold text-foreground">{excludedCount} opted out / failed</p>
+            </div>
+            <div>
+              <p className="label-caps text-foreground-subtle">Parts each</p>
+              <p className="mt-0.5 font-semibold text-foreground">{previewSegments}</p>
+            </div>
+            <div>
+              <p className="label-caps text-foreground-subtle">Estimated cost</p>
+              <p className="mt-0.5 font-semibold text-foreground">{estimatedCost} SMS credits</p>
+            </div>
+          </div>
+          <p className="mt-4 text-xs text-foreground-subtle">
+            SMS credit after this send: <span className="font-medium text-foreground">{creditAfterSend.toLocaleString()}</span>.
+            Charged to SMS credit only — voice credit pays for the calls themselves and tops up separately. Sends pause
+            automatically if credit runs out mid-batch.
+          </p>
+        </CardBody>
+      </Card>
+
+      {sendHistory.length > 0 ? (
+        <Card>
+          <CardHeader title="Send history" />
+          <CardBody className="p-0">
+            <ul className="divide-y divide-border">
+              {sendHistory.map((event) => (
+                <li key={event.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                  <span className="text-foreground">
+                    {(event.metadata?.recipientCount as number | undefined) ?? "—"} recipients
+                  </span>
+                  <span className="text-xs text-foreground-subtle">{formatDateTime(event.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader

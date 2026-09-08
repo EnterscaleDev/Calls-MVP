@@ -10,14 +10,10 @@ import { CampaignStatusBadge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { ProgressBar } from "@/components/ui/Progress";
 import { formatPercent, isToday } from "../_lib/format";
+import { MOCK_SMS_CREDITS, MOCK_VOICE_MINUTES } from "../_lib/credits";
 import type { AssignmentStatus } from "@/lib/types";
 
 const ACTIVE_ASSIGNMENT_STATUSES: AssignmentStatus[] = ["assigned", "in_progress", "completed"];
-
-// Presentational only — mirrors the top bar's mock credit chips. There's no
-// real billing backend yet, so "Top up" below is explicitly inert.
-const MOCK_SMS_CREDITS = 4180;
-const MOCK_VOICE_MINUTES = 860;
 
 export default function AdminOverviewPage() {
   const { ready, db } = useStore();

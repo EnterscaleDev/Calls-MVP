@@ -18,6 +18,7 @@ import {
 import { clearAdminSession, useAdminSession } from "@/lib/auth";
 import { LoadingScreen } from "@/components/ui/States";
 import { cn } from "@/lib/cn";
+import { MOCK_SMS_CREDITS, MOCK_VOICE_MINUTES } from "./_lib/credits";
 
 const NAV = [
   { href: "/admin/overview", label: "Overview", icon: LayoutDashboard },
@@ -26,11 +27,6 @@ const NAV = [
   { href: "/admin/call-activity", label: "Call Activity", icon: PhoneCall },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
-
-// Presentational only — there's no real billing backend yet. See Overview's
-// credit hero card for the "Top up" affordance, which is explicitly inert.
-const MOCK_SMS_CREDITS = 4180;
-const MOCK_VOICE_MINUTES = 860;
 
 export default function AdminDashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
