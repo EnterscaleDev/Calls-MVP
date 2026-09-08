@@ -1,26 +1,92 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f6f4;
+  --surface: #ffffff;
+  --surface-muted: #f1efec;
+  --border: #e7e3df;
+  --foreground: #191f24;
+  --foreground-muted: #6b6763;
+  --foreground-subtle: #9c9892;
+
+  /* Navy: the brand/hero color — sidebar chrome and "hero" stat cards */
+  --navy: #19384d;
+  --navy-hover: #12293a;
+  --navy-foreground: #ffffff;
+  --navy-soft: #edf2f5;
+
+  /* Orange: primary action color */
+  --primary: #ff5100;
+  --primary-hover: #c43d00;
+  --primary-foreground: #ffffff;
+  --primary-soft: #fff1ea;
+  --primary-soft-border: #ffd2bd;
+
+  /* Teal: "live"/active/info status */
+  --info: #008d9d;
+  --info-hover: #026470;
+  --info-soft: #e6f4f5;
+  --info-soft-border: #c6e5e8;
+
+  --success: #157347;
+  --success-soft: #e7f4ec;
+  --warning: #9a6b00;
+  --warning-soft: #fcf3e0;
+  --danger: #c0392b;
+  --danger-soft: #fcecea;
+  --neutral-soft: #edeeec;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-foreground-subtle: var(--foreground-subtle);
+
+  --color-navy: var(--navy);
+  --color-navy-hover: var(--navy-hover);
+  --color-navy-foreground: var(--navy-foreground);
+  --color-navy-soft: var(--navy-soft);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-border: var(--primary-soft-border);
+
+  --color-info: var(--info);
+  --color-info-hover: var(--info-hover);
+  --color-info-soft: var(--info-soft);
+  --color-info-soft-border: var(--info-soft-border);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-neutral-soft: var(--neutral-soft);
+
+  --font-sans: var(--font-barlow);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans), system-ui, Arial, Helvetica, sans-serif;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+* {
+  border-color: var(--color-border);
+}
+
+.label-caps {
+  font-size: 0.65625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
