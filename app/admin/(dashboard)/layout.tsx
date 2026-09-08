@@ -22,7 +22,7 @@ import { cn } from "@/lib/cn";
 const NAV = [
   { href: "/admin/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/campaigns", label: "Campaigns", icon: Megaphone },
-  { href: "/admin/agents", label: "Agents", icon: Users },
+  { href: "/admin/agents", label: "People", icon: Users },
   { href: "/admin/call-activity", label: "Call Activity", icon: PhoneCall },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];

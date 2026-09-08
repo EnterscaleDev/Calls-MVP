@@ -317,11 +317,15 @@ export function listAgentsWithStats(db: MockDatabase) {
       (a) => a.agentId === agent.id && new Date(a.startedAt) >= startOfToday
     );
     const completedToday = attemptsToday.filter((a) => a.disposition === "completed");
+    const completedAllTime = db.callAttempts.filter(
+      (a) => a.agentId === agent.id && a.disposition === "completed"
+    ).length;
     return {
       agent,
       campaignNames: campaignNames as string[],
       callsToday: attemptsToday.length,
       completedToday: completedToday.length,
+      completedAllTime,
     };
   });
 }
