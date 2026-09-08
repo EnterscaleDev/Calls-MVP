@@ -70,7 +70,7 @@
   --color-danger-soft: var(--danger-soft);
   --color-neutral-soft: var(--neutral-soft);
 
-  --font-sans: var(--font-barlow);
+  --font-sans: var(--font-space-grotesk);
   --font-mono: var(--font-geist-mono);
 }
 
