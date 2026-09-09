@@ -126,7 +126,11 @@ function SchedulingPageInner() {
     } else {
       actions.assignParticipant(campaign.id, row.participantId, agentId, actor);
     }
-    setPendingAgent((prev) => ({ ...prev, [row.participantId]: "" }));
+    setPendingAgent((prev) => {
+      const next = { ...prev };
+      delete next[row.participantId];
+      return next;
+    });
   }
 
   function AssignControl({ row, compact = false }: { row: SchedulingRow; compact?: boolean }) {
