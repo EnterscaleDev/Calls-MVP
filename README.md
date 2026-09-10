@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Calls MVP
 
-## Getting Started
+A telephone-interview research-operations platform — a vertical slice covering three roles:
 
-First, run the development server:
+- **Admin** — create campaigns, import contacts, send SMS invitations, assign agents, monitor calls and interview scheduling.
+- **Agent** — daily call queue, masked click-to-call, live notes, and call disposition.
+- **Participant** — token-based consent and self-service booking, no account required.
+
+This is a **mock-data prototype**: all app state lives in a React Context backed by `localStorage` (see [`lib/store.tsx`](lib/store.tsx) and [`lib/mock-data.ts`](lib/mock-data.ts)). There is no real backend, database, or telephony/SMS provider wired up yet — those are isolated behind adapter modules so a real backend can be dropped in later without touching UI code.
+
+## Getting started
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). The app seeds its own mock data on first load — no setup required.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Admin: `/admin/login` (any password works in the prototype)
+- Agent: `/agent/login` (any password works; signing in as an invited agent activates their account)
+- Participant: `/participate/[token]` — tokens are generated per-participant in the seed data (see `db.participants` in `localStorage` under the `calls-ops-mock-db-v1` key)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Structure
 
-## Learn More
+- `app/admin/(dashboard)/**` — Admin console: campaigns, people, org-wide call activity, settings, and per-campaign tabs (Overview, Audience, Invitations, Scheduling, Agents, Call Script, Call Activity, Settings)
+- `app/agent/**` — Agent daily queue, call workspace, and call history
+- `app/participate/[token]/**` — Public participant flow: landing/consent → schedule → confirmation, with decline/reconsider handling
+- `lib/store.tsx`, `lib/mock-data.ts`, `lib/selectors.ts` — Mock database, actions, and derived-state selectors standing in for a real backend
+- `lib/adapters/**` — Mocked SMS/telephony provider boundaries used by the app today
+- `lib/server/**` — Draft **real** telephony provider clients (SendChamp, Africa's Talking) kept isolated behind `server-only` and not wired into the app — see the comments in each file for status. Real credentials are never committed; copy `.env.example` to `.env.local` and fill in your own.
 
-To learn more about Next.js, take a look at the following resources:
+## Privacy & security notes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Agents never see a participant's raw phone number — calling is masked end-to-end, and the participant's number never travels through a URL.
+- Any real provider credentials go in `.env.local` (gitignored) only, never in code or committed files.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Tech stack
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js (App Router) · TypeScript · Tailwind CSS v4 · React Context + localStorage mock persistence
