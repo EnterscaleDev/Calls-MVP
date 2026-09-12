@@ -1,21 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Form";
 import { Card } from "@/components/ui/Card";
 import { InlineBanner } from "@/components/ui/States";
-import { setAdminSession } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/client";
 
-export default function AdminLoginPage() {
+function AdminLoginPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("toni@enterscale.com");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    searchParams.get("error") === "wrong_role"
+      ? "That account isn't an admin. Sign in at the agent login instead."
+      : ""
+  );
   const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
       setError("Enter an email and password to continue.");
@@ -23,12 +28,18 @@ export default function AdminLoginPage() {
     }
     setError("");
     setSubmitting(true);
-    // Mock auth: any non-empty credentials sign in. A real backend swaps this
-    // for Supabase Auth without changing where AdminShell reads the session.
-    setTimeout(() => {
-      setAdminSession({ name: email.split("@")[0] });
-      router.push("/admin/overview");
-    }, 300);
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (signInError) {
+      setSubmitting(false);
+      setError(signInError.message);
+      return;
+    }
+    router.push("/admin/overview");
+    router.refresh();
   }
 
   return (
@@ -62,10 +73,15 @@ export default function AdminLoginPage() {
             {submitting ? "Signing in..." : "Sign in"}
           </Button>
         </form>
-        <p className="mt-4 text-center text-xs text-foreground-subtle">
-          Prototype build — any email/password combination signs in.
-        </p>
       </Card>
     </div>
+  );
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminLoginPageInner />
+    </Suspense>
   );
 }

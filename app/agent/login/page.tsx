@@ -1,52 +1,45 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Form";
 import { Card } from "@/components/ui/Card";
 import { InlineBanner } from "@/components/ui/States";
-import { setAgentSession } from "@/lib/auth";
-import { useStore } from "@/lib/store";
-import { LoadingScreen } from "@/components/ui/States";
+import { createClient } from "@/lib/supabase/client";
 
-export default function AgentLoginPage() {
+function AgentLoginPageInner() {
   const router = useRouter();
-  const { ready, db, actions } = useStore();
-  const [email, setEmail] = useState("priya.shah@example.com");
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState("olutoni_dada@yahoo.com");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    searchParams.get("error") === "wrong_role"
+      ? "That account isn't an agent. Sign in at the admin login instead."
+      : ""
+  );
   const [submitting, setSubmitting] = useState(false);
 
-  if (!ready) return <LoadingScreen label="Loading..." />;
-
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!password.trim()) {
-      setError("Enter your password to continue.");
-      return;
-    }
-    const agent = db.agents.find((a) => a.email.toLowerCase() === email.trim().toLowerCase());
-    if (!agent) {
-      setError("We don't recognize that email. Ask your Admin to invite you.");
-      return;
-    }
-    if (agent.status === "inactive") {
-      setError("Your access has been deactivated. Contact your Admin.");
+    if (!email.trim() || !password.trim()) {
+      setError("Enter an email and password to continue.");
       return;
     }
     setError("");
     setSubmitting(true);
-    setTimeout(() => {
-      // First sign-in is what turns an "invited" agent "active" — this is
-      // the only place that transition happens, mirroring a real accepted
-      // invite rather than requiring a separate admin activation step.
-      if (agent.status === "invited") {
-        actions.setAgentStatus(agent.id, "active");
-      }
-      setAgentSession({ agentId: agent.id });
-      router.push("/agent");
-    }, 300);
+    const supabase = createClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (signInError) {
+      setSubmitting(false);
+      setError(signInError.message);
+      return;
+    }
+    router.push("/agent");
+    router.refresh();
   }
 
   return (
@@ -78,11 +71,15 @@ export default function AgentLoginPage() {
             {submitting ? "Signing in..." : "Sign in"}
           </Button>
         </form>
-        <p className="mt-4 text-center text-xs text-foreground-subtle">
-          Prototype build — any password works. priya.shah@example.com is already active; signing in as an
-          invited agent (e.g. marcus.webb@example.com) activates their account.
-        </p>
       </Card>
     </div>
+  );
+}
+
+export default function AgentLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <AgentLoginPageInner />
+    </Suspense>
   );
 }
