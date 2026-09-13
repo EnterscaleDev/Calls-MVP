@@ -3,8 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Target, Clock3, Gift, ShieldCheck } from "lucide-react";
-import { useParticipantToken } from "@/lib/participant-context";
-import { useStore } from "@/lib/store";
+import { recordParticipantConsent, useParticipantToken } from "@/lib/participant-context";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Form";
@@ -43,13 +42,13 @@ function InfoRow({
 
 export default function ConsentPage() {
   const router = useRouter();
-  const { token, campaign, participant, firstName, hasAgreedParticipation, hasDeclined, booking } =
+  const { token, campaign, firstName, hasAgreedParticipation, hasDeclined, booking, refetch } =
     useParticipantToken();
-  const { actions } = useStore();
 
   const [participationChecked, setParticipationChecked] = useState(false);
   const [recordingChoice, setRecordingChoice] = useState<"agree" | "decline" | null>(null);
   const [justDeclined, setJustDeclined] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // Guard: nothing to reconsider — if they already agreed, this screen is redundant.
   useEffect(() => {
@@ -70,17 +69,24 @@ export default function ConsentPage() {
 
   const needsRecordingChoice = campaign.recordingEnabled;
   const canContinue = participationChecked && (!needsRecordingChoice || recordingChoice !== null);
-  const about = campaign.researchObjective || campaign.description;
+  const about = campaign.researchObjective;
 
-  function handleAgree() {
-    if (!canContinue) return;
-    const recordingAgreed = needsRecordingChoice ? recordingChoice === "agree" : undefined;
-    actions.recordConsent(participant.id, true, recordingAgreed);
+  async function handleAgree() {
+    if (!canContinue || submitting) return;
+    setSubmitting(true);
+    await recordParticipantConsent(token, "participation", "agreed");
+    if (needsRecordingChoice) {
+      await recordParticipantConsent(token, "recording", recordingChoice === "agree" ? "agreed" : "declined");
+    }
+    await refetch();
     router.push(`/participate/${token}/schedule`);
   }
 
-  function handleDecline() {
-    actions.recordConsent(participant.id, false);
+  async function handleDecline() {
+    if (submitting) return;
+    setSubmitting(true);
+    await recordParticipantConsent(token, "participation", "declined");
+    await refetch();
     setJustDeclined(true);
   }
 
@@ -159,10 +165,10 @@ export default function ConsentPage() {
       </Card>
 
       <div className="flex flex-col gap-2">
-        <Button className="w-full justify-center" disabled={!canContinue} onClick={handleAgree}>
+        <Button className="w-full justify-center" disabled={!canContinue || submitting} onClick={handleAgree}>
           I Agree — Choose a Time
         </Button>
-        <Button variant="ghost" className="w-full justify-center" onClick={handleDecline}>
+        <Button variant="ghost" className="w-full justify-center" disabled={submitting} onClick={handleDecline}>
           Decline
         </Button>
       </div>

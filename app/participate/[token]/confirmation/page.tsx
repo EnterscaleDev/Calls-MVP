@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useParticipantToken } from "@/lib/participant-context";
-import { useStore } from "@/lib/store";
+import {
+  cancelParticipantBooking,
+  rescheduleParticipantBooking,
+  useParticipantToken,
+} from "@/lib/participant-context";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { InlineBanner } from "@/components/ui/States";
@@ -11,8 +14,7 @@ import { SlotPicker, formatSlotRange } from "../_components/SlotPicker";
 
 export default function ConfirmationPage() {
   const router = useRouter();
-  const { token, campaign, booking, hasAgreedParticipation } = useParticipantToken();
-  const { actions } = useStore();
+  const { token, campaign, booking, hasAgreedParticipation, refetch } = useParticipantToken();
 
   const [mode, setMode] = useState<"view" | "reschedule" | "cancel-confirm" | "cancelled">("view");
 
@@ -27,23 +29,24 @@ export default function ConfirmationPage() {
 
   if (!booking) return null;
 
-  const isCancelled = booking.status === "cancelled" || mode === "cancelled";
+  // A cancelled booking is never `is_current` (see interview_bookings.is_current's
+  // trigger), so the context never hands us one — "cancelled" is purely local
+  // state for the brief window right after the participant's own cancel click,
+  // shown once and not persisted; reopening the link later resolves straight to
+  // "no current booking" and redirects to schedule instead.
+  const isCancelled = mode === "cancelled";
 
-  function handleReschedule(start: Date, end: Date) {
+  async function handleReschedule(start: Date, end: Date) {
     if (!booking) return;
-    actions.rescheduleBooking(
-      booking.id,
-      start.toISOString(),
-      end.toISOString(),
-      "Participant",
-      "Rescheduled by participant"
-    );
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    await rescheduleParticipantBooking(token, booking.id, start.toISOString(), end.toISOString(), timezone);
+    await refetch();
     setMode("view");
   }
 
-  function handleCancel() {
+  async function handleCancel() {
     if (!booking) return;
-    actions.cancelBooking(booking.id, "Participant");
+    await cancelParticipantBooking(token, booking.id);
     setMode("cancelled");
   }
 

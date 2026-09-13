@@ -87,7 +87,7 @@ export default function ParticipantLandingPage() {
     ? `/participate/${token}/schedule`
     : `/participate/${token}/consent`;
 
-  const about = (campaign.researchObjective || campaign.description).trim().replace(/[.\s]+$/, "");
+  const about = campaign.researchObjective.trim().replace(/[.\s]+$/, "");
 
   return (
     <div className="flex flex-col gap-5">

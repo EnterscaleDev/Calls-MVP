@@ -2,18 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useParticipantToken } from "@/lib/participant-context";
-import { useStore } from "@/lib/store";
+import { createParticipantBooking, useParticipantToken } from "@/lib/participant-context";
 import { SlotPicker } from "../_components/SlotPicker";
 import { LoadingScreen } from "@/components/ui/States";
 
 export default function SchedulePage() {
   const router = useRouter();
-  const { token, campaign, participant, hasAgreedParticipation, booking } = useParticipantToken();
-  const { actions } = useStore();
+  const { token, campaign, hasAgreedParticipation, booking, refetch } = useParticipantToken();
   const [booking_, setBooking] = useState(false);
 
-  const hasLiveBooking = !!booking && booking.status !== "cancelled";
+  // A cancelled booking is never `is_current` (interview_bookings.is_current's
+  // trigger excludes cancelled rows from candidacy), so any booking the context
+  // hands us here is already guaranteed live.
+  const hasLiveBooking = !!booking;
 
   useEffect(() => {
     if (!hasAgreedParticipation) {
@@ -27,11 +28,12 @@ export default function SchedulePage() {
 
   if (!hasAgreedParticipation || hasLiveBooking) return null;
 
-  function handleSelect(start: Date, end: Date) {
+  async function handleSelect(start: Date, end: Date) {
     if (booking_) return;
     setBooking(true);
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-    actions.createBooking(participant.id, start.toISOString(), end.toISOString(), timezone);
+    await createParticipantBooking(token, start.toISOString(), end.toISOString(), timezone);
+    await refetch();
     router.push(`/participate/${token}/confirmation`);
   }
 

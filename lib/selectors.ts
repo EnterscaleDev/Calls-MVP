@@ -245,7 +245,10 @@ export function resolveParticipantByToken(db: MockDatabase, token: string) {
   };
 }
 
-export function getAvailableSlots(campaign: Campaign, count = 5): { start: Date; end: Date }[] {
+export function getAvailableSlots(
+  campaign: { estimatedDurationMinutes: number },
+  count = 5
+): { start: Date; end: Date }[] {
   const slots: { start: Date; end: Date }[] = [];
   const hours = [9, 10, 11, 14, 15, 16];
   const now = new Date();

@@ -5,10 +5,9 @@ import { format, isSameDay } from "date-fns";
 import { getAvailableSlots } from "@/lib/selectors";
 import { Card, CardBody } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/States";
-import type { Campaign } from "@/lib/types";
 
 interface SlotPickerProps {
-  campaign: Campaign;
+  campaign: { estimatedDurationMinutes: number };
   onSelect: (start: Date, end: Date) => void;
   busy?: boolean;
 }
