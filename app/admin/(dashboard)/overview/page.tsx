@@ -4,8 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { useStore } from "@/lib/store";
 import { useAdminSession } from "@/lib/auth";
+import { useAdminData } from "@/lib/hooks/useAdminData";
 import { getCampaignFunnel, getCampaignMetrics } from "@/lib/selectors";
-import { LoadingScreen, InlineBanner } from "@/components/ui/States";
+import { LoadingScreen, InlineBanner, ErrorState } from "@/components/ui/States";
 import { Card, CardHeader, CardBody, StatCard } from "@/components/ui/Card";
 import { CampaignStatusBadge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
@@ -18,7 +19,9 @@ import type { AssignmentStatus } from "@/lib/types";
 const ACTIVE_ASSIGNMENT_STATUSES: AssignmentStatus[] = ["assigned", "in_progress", "completed"];
 
 export default function AdminOverviewPage() {
-  const { ready, db, actions } = useStore();
+  // Credits top-up stays on the mock store this stage (org_credits writes go
+  // through the top_up_credits() RPC — that's Stage 5, alongside invitations).
+  const { ready: mockReady, db: mockDb, actions } = useStore();
   const { session } = useAdminSession();
   const actor = session?.name ?? "Toni";
   const [topUpOpen, setTopUpOpen] = useState(false);
@@ -26,7 +29,10 @@ export default function AdminOverviewPage() {
   const [selectedPackageId, setSelectedPackageId] = useState(SMS_TOP_UP_PACKAGES[0].id);
   const [topUpSuccess, setTopUpSuccess] = useState("");
 
-  if (!ready) return <LoadingScreen label="Loading overview..." />;
+  const { data: db, loading, error } = useAdminData();
+
+  if (!mockReady || loading || !db) return <LoadingScreen label="Loading overview..." />;
+  if (error) return <ErrorState title="Couldn't load the overview" description={error} />;
 
   const packages = topUpKind === "sms" ? SMS_TOP_UP_PACKAGES : VOICE_TOP_UP_PACKAGES;
   const selectedPackage: TopUpPackage =
@@ -163,8 +169,8 @@ export default function AdminOverviewPage() {
       <div className="md:max-w-sm">
         <StatCard
           label="SMS & voice credits"
-          value={`${db.orgCredits.sms.toLocaleString()} SMS`}
-          hint={`${db.orgCredits.voiceMinutes.toLocaleString()} voice minutes remaining`}
+          value={`${mockDb.orgCredits.sms.toLocaleString()} SMS`}
+          hint={`${mockDb.orgCredits.voiceMinutes.toLocaleString()} voice minutes remaining`}
           tone="hero"
         >
           <div className="mt-3">

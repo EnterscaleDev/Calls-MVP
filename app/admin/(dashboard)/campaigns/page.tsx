@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useStore } from "@/lib/store";
+import { useAdminData } from "@/lib/hooks/useAdminData";
 import { getCampaignFunnel, getCampaignMetrics } from "@/lib/selectors";
-import { LoadingScreen, EmptyState } from "@/components/ui/States";
+import { LoadingScreen, EmptyState, ErrorState } from "@/components/ui/States";
 import { Card, CardBody } from "@/components/ui/Card";
 import { CampaignStatusBadge, CampaignTypeChip } from "@/components/ui/Badge";
 import { ButtonLink } from "@/components/ui/Button";
@@ -14,12 +14,13 @@ import { formatDate, formatPercent } from "../_lib/format";
 import type { CampaignStatus } from "@/lib/types";
 
 export default function CampaignsListPage() {
-  const { ready, db } = useStore();
+  const { data: db, loading, error } = useAdminData();
   const [search, setSearch] = useState("");
   const [clientFilter, setClientFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | CampaignStatus>("all");
 
-  if (!ready) return <LoadingScreen label="Loading campaigns..." />;
+  if (loading || !db) return <LoadingScreen label="Loading campaigns..." />;
+  if (error) return <ErrorState title="Couldn't load campaigns" description={error} />;
 
   const clients = [...new Set(db.campaigns.map((c) => c.clientName))].sort();
 

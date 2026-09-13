@@ -1,10 +1,10 @@
 "use client";
 
-import { useStore } from "@/lib/store";
+import { useAdminData } from "@/lib/hooks/useAdminData";
 import { getCampaignFunnel, getCampaignMetrics, getCallAttemptsForCampaign } from "@/lib/selectors";
 import { Card, CardHeader, CardBody, StatCard } from "@/components/ui/Card";
 import { FunnelRow, ProgressBar } from "@/components/ui/Progress";
-import { EmptyState } from "@/components/ui/States";
+import { EmptyState, LoadingScreen, ErrorState } from "@/components/ui/States";
 import { ButtonLink } from "@/components/ui/Button";
 import { safeDiv, formatPercent } from "../../_lib/format";
 import { useCampaignDetail } from "./campaign-context";
@@ -17,7 +17,10 @@ interface StateCount {
 
 export default function CampaignOverviewPage() {
   const campaign = useCampaignDetail();
-  const { db } = useStore();
+  const { data: db, loading, error } = useAdminData();
+
+  if (loading || !db) return <LoadingScreen label="Loading campaign overview..." />;
+  if (error) return <ErrorState title="Couldn't load this campaign" description={error} />;
 
   const funnel = getCampaignFunnel(db, campaign.id);
   const metrics = getCampaignMetrics(db, campaign.id);

@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { useStore } from "@/lib/store";
+import { useAdminData } from "@/lib/hooks/useAdminData";
 import { getCampaign } from "@/lib/selectors";
 import { LoadingScreen, ErrorState } from "@/components/ui/States";
 import { CampaignStatusBadge, CampaignTypeChip } from "@/components/ui/Badge";
@@ -19,11 +19,11 @@ export default function CampaignDetailLayout({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { ready, db } = useStore();
+  const { data: db, loading, error } = useAdminData();
 
-  if (!ready) return <LoadingScreen label="Loading campaign..." />;
+  if (loading || !db) return <LoadingScreen label="Loading campaign..." />;
 
-  const campaign = getCampaign(db, id);
+  const campaign = error ? undefined : getCampaign(db, id);
   if (!campaign) {
     return (
       <ErrorState

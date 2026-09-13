@@ -1,12 +1,13 @@
 "use client";
 
-import { useStore } from "@/lib/store";
-import { LoadingScreen } from "@/components/ui/States";
+import { useAdminData } from "@/lib/hooks/useAdminData";
+import { LoadingScreen, ErrorState } from "@/components/ui/States";
 import { CallActivityBoard } from "../_lib/CallActivityBoard";
 
 export default function CallActivityPage() {
-  const { ready, db } = useStore();
-  if (!ready) return <LoadingScreen label="Loading call activity..." />;
+  const { data: db, loading, error } = useAdminData();
+  if (loading || !db) return <LoadingScreen label="Loading call activity..." />;
+  if (error) return <ErrorState title="Couldn't load call activity" description={error} />;
 
   return (
     <div className="flex flex-col gap-5">

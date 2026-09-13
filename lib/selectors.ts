@@ -11,11 +11,17 @@ import type {
   InterviewBooking,
 } from "./types";
 
-export function getCampaign(db: MockDatabase, campaignId: string): Campaign | undefined {
+export function getCampaign(
+  db: Pick<MockDatabase, "campaigns">,
+  campaignId: string
+): Campaign | undefined {
   return db.campaigns.find((c) => c.id === campaignId);
 }
 
-export function getCampaignFunnel(db: MockDatabase, campaignId: string): CampaignFunnel {
+export function getCampaignFunnel(
+  db: Pick<MockDatabase, "participants" | "invitations" | "callAttempts">,
+  campaignId: string
+): CampaignFunnel {
   const participants = db.participants.filter((p) => p.campaignId === campaignId);
   const invited = participants.filter((p) => p.participationStatus !== "imported").length;
   const delivered = db.invitations.filter(
@@ -43,7 +49,10 @@ export function getCampaignFunnel(db: MockDatabase, campaignId: string): Campaig
   };
 }
 
-export function getCampaignMetrics(db: MockDatabase, campaignId: string): CampaignMetrics {
+export function getCampaignMetrics(
+  db: Pick<MockDatabase, "campaigns" | "participants" | "invitations" | "callAttempts">,
+  campaignId: string
+): CampaignMetrics {
   const funnel = getCampaignFunnel(db, campaignId);
   const campaign = getCampaign(db, campaignId);
   const target = campaign?.targetCompletions ?? 0;
@@ -333,13 +342,16 @@ export function listAgentsWithStats(db: MockDatabase) {
   });
 }
 
-export function getCallAttemptsForCampaign(db: MockDatabase, campaignId: string): CallAttempt[] {
+export function getCallAttemptsForCampaign(
+  db: Pick<MockDatabase, "callAttempts">,
+  campaignId: string
+): CallAttempt[] {
   return db.callAttempts
     .filter((a) => a.campaignId === campaignId)
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
 
-export function getRecordingForAttempt(db: MockDatabase, callAttemptId: string) {
+export function getRecordingForAttempt(db: Pick<MockDatabase, "recordings">, callAttemptId: string) {
   return db.recordings.find((r) => r.callAttemptId === callAttemptId);
 }
 

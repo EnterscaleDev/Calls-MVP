@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Download } from "lucide-react";
-import type { MockDatabase } from "@/lib/mock-data";
 import { getCallAttemptsForCampaign, getRecordingForAttempt, getCampaign } from "@/lib/selectors";
 import { Card, CardHeader, CardBody, StatCard } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Form";
@@ -11,7 +10,17 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/States";
 import { OutcomeBadge, Badge } from "@/components/ui/Badge";
 import { formatDateTime, formatDuration, safeDiv, formatPercent, isToday, labelize } from "./format";
-import type { CallOutcome } from "@/lib/types";
+import type {
+  Campaign,
+  CampaignParticipant,
+  Contact,
+  InterviewBooking,
+  CallAssignment,
+  AgentProfile,
+  CallAttempt,
+  Recording,
+  CallOutcome,
+} from "@/lib/types";
 
 const RECORDING_TONE: Record<string, "info" | "success" | "danger" | "neutral"> = {
   recording: "info",
@@ -20,11 +29,26 @@ const RECORDING_TONE: Record<string, "info" | "success" | "danger" | "neutral"> 
   unavailable: "neutral",
 };
 
+/** Narrow, structural — satisfied by both the mock MockDatabase (still used
+ * by the not-yet-migrated per-campaign Call Activity tab) and the real
+ * useAdminData() shape (the org-wide page), so this shared component doesn't
+ * need to know or care which one it's handed. */
+export interface CallActivityBoardData {
+  campaigns: Campaign[];
+  participants: CampaignParticipant[];
+  contacts: Contact[];
+  bookings: InterviewBooking[];
+  assignments: CallAssignment[];
+  agents: AgentProfile[];
+  callAttempts: CallAttempt[];
+  recordings: Recording[];
+}
+
 export function CallActivityBoard({
   db,
   campaignId,
 }: {
-  db: MockDatabase;
+  db: CallActivityBoardData;
   campaignId?: string;
 }) {
   const [agentFilter, setAgentFilter] = useState("");
