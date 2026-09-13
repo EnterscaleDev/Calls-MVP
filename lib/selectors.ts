@@ -80,7 +80,10 @@ export interface ParticipantRow {
   assignmentId?: string;
 }
 
-export function getCampaignParticipantRows(db: MockDatabase, campaignId: string): ParticipantRow[] {
+export function getCampaignParticipantRows(
+  db: Pick<MockDatabase, "participants" | "contacts" | "invitations" | "bookings" | "assignments" | "agents">,
+  campaignId: string
+): ParticipantRow[] {
   return db.participants
     .filter((p) => p.campaignId === campaignId)
     .map((p) => {

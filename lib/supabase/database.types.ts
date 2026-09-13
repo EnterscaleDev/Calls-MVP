@@ -859,6 +859,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_check_duplicate_phones: {
+        Args: { p_campaign_id: string; p_phones: string[] }
+        Returns: string[]
+      }
+      admin_import_contact: {
+        Args: {
+          p_campaign_id: string
+          p_email: string
+          p_external_customer_id: string
+          p_name: string
+          p_phone: string
+          p_segment: string
+        }
+        Returns: string
+      }
       agent_call_queue: {
         Args: never
         Returns: {

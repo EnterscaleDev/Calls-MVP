@@ -2,15 +2,15 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Eye, EyeOff, Download } from "lucide-react";
-import { useStore } from "@/lib/store";
-import { useAdminSession } from "@/lib/auth";
+import { useAdminData } from "@/lib/hooks/useAdminData";
+import { createClient } from "@/lib/supabase/client";
 import { parseContactsCsv, EXAMPLE_CSV, EXAMPLE_CSV_FIELDS, normalizePhone } from "@/lib/csv";
 import { getCampaignParticipantRows } from "@/lib/selectors";
 import type { ParseResult } from "@/lib/csv";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Form";
-import { EmptyState, InlineBanner } from "@/components/ui/States";
+import { EmptyState, InlineBanner, LoadingScreen, ErrorState } from "@/components/ui/States";
 import { ParticipationStatusBadge, Badge } from "@/components/ui/Badge";
 import { useCampaignDetail } from "../campaign-context";
 
@@ -30,11 +30,15 @@ const VALIDATION_TONE: Record<string, "success" | "danger" | "warning" | "neutra
   duplicate: "warning",
 };
 
+interface RevealedContact {
+  phone: string;
+  email?: string;
+  externalCustomerId?: string;
+}
+
 export default function AudiencePage() {
   const campaign = useCampaignDetail();
-  const { db, actions } = useStore();
-  const { session } = useAdminSession();
-  const actor = session?.name ?? "Toni";
+  const { data: db, loading, error, refetch } = useAdminData();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [parseResult, setParseResult] = useState<ParseResult | null>(null);
@@ -42,27 +46,85 @@ export default function AudiencePage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [importing, setImporting] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const [revealing, setRevealing] = useState(false);
+  const [revealError, setRevealError] = useState("");
+  const [revealedContacts, setRevealedContacts] = useState<Map<string, RevealedContact>>(new Map());
   const [segmentFilter, setSegmentFilter] = useState("all");
 
-  const participantRows = getCampaignParticipantRows(db, campaign.id);
+  // Masked by default (contacts_list_masked() via useAdminData) — revealed
+  // values are overlaid here from local page state only, never written back
+  // into the shared cache, so navigating away and back re-masks everything.
+  // Computed unconditionally (db may be null while loading) so every hook
+  // below it still runs on every render — early-returning before a hook call
+  // is a Rules-of-Hooks violation the moment `loading`/`error` flips.
+  const participantRows = db
+    ? getCampaignParticipantRows(db, campaign.id).map((row) => {
+        const reveal = revealedContacts.get(row.contact.id);
+        if (!reveal) return row;
+        return {
+          ...row,
+          contact: {
+            ...row.contact,
+            phone: reveal.phone,
+            email: reveal.email,
+            externalCustomerId: reveal.externalCustomerId,
+          },
+        };
+      })
+    : [];
+
   const segments = useMemo(
     () => [...new Set(participantRows.map((r) => r.segment).filter(Boolean))] as string[],
-    [participantRows]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [db, campaign.id]
   );
+
+  if (loading || !db) return <LoadingScreen label="Loading audience..." />;
+  if (error) return <ErrorState title="Couldn't load the audience" description={error} />;
+
   const visibleRows = participantRows.filter(
     (r) => segmentFilter === "all" || r.segment === segmentFilter
   );
 
-  function handleToggleReveal() {
-    const next = !revealed;
-    if (next) actions.revealContactNumbers(campaign.id, actor);
-    setRevealed(next);
+  async function handleToggleReveal() {
+    if (revealed) {
+      setRevealed(false);
+      setRevealedContacts(new Map());
+      return;
+    }
+    setRevealing(true);
+    setRevealError("");
+    const contactIds = participantRows.map((r) => r.contact.id);
+    const supabase = createClient();
+    const { data, error: rpcError } = await supabase.rpc("contacts_reveal", {
+      p_contact_ids: contactIds,
+      p_campaign_id: campaign.id,
+    });
+    setRevealing(false);
+    if (rpcError) {
+      setRevealError(rpcError.message);
+      return;
+    }
+    const map = new Map<string, RevealedContact>();
+    for (const row of data ?? []) {
+      map.set(row.id, {
+        phone: row.phone,
+        email: row.email ?? undefined,
+        externalCustomerId: row.external_customer_id ?? undefined,
+      });
+    }
+    setRevealedContacts(map);
+    setRevealed(true);
   }
 
   function handleExport() {
     const header = "Name,Phone,Segment,Status\n";
     const body = visibleRows
-      .map((r) => [r.contact.name, r.contact.phone, r.segment ?? "", r.participationStatus].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .map((r) =>
+        [r.contact.name, r.contact.phone, r.segment ?? "", r.participationStatus]
+          .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+          .join(",")
+      )
       .join("\n");
     const blob = new Blob([header + body], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -75,46 +137,96 @@ export default function AudiencePage() {
     URL.revokeObjectURL(url);
   }
 
-  const existingPhones = useMemo(() => {
-    const set = new Set<string>();
-    for (const row of participantRows) {
-      set.add(normalizePhone(row.contact.phone));
-    }
-    return set;
-  }, [participantRows]);
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  // Duplicate-detection against contacts already in this campaign can't
+  // compare raw phones client-side (they're masked by default) — parse for
+  // within-file duplicates only (pure, synchronous), then re-classify against
+  // the campaign server-side via admin_check_duplicate_phones(), which only
+  // echoes back matches among the numbers we already submitted.
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setSuccessMessage("");
     setParseError("");
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const text = String(reader.result ?? "");
-        const result = parseContactsCsv(text, existingPhones);
-        setParseResult(result);
-      } catch {
-        setParseError("Couldn't read that file. Make sure it's a valid CSV.");
-        setParseResult(null);
+    const text = await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => resolve(null);
+      reader.readAsText(file);
+    });
+    if (text === null) {
+      setParseError("Couldn't read that file. Try again.");
+      return;
+    }
+    let result: ParseResult;
+    try {
+      result = parseContactsCsv(text, new Set());
+    } catch {
+      setParseError("Couldn't read that file. Make sure it's a valid CSV.");
+      return;
+    }
+
+    const candidatePhones = result.rows
+      .filter((r) => r.validation === "valid")
+      .map((r) => normalizePhone(r.phone));
+    if (candidatePhones.length > 0) {
+      const supabase = createClient();
+      const { data: duplicates } = await supabase.rpc("admin_check_duplicate_phones", {
+        p_campaign_id: campaign.id,
+        p_phones: candidatePhones,
+      });
+      const dupSet = new Set(duplicates ?? []);
+      if (dupSet.size > 0) {
+        result = {
+          ...result,
+          rows: result.rows.map((r) =>
+            r.validation === "valid" && dupSet.has(normalizePhone(r.phone))
+              ? { ...r, validation: "duplicate" as const }
+              : r
+          ),
+          counts: {
+            ...result.counts,
+            valid: result.counts.valid - dupSet.size,
+            duplicate: result.counts.duplicate + dupSet.size,
+          },
+        };
       }
-    };
-    reader.onerror = () => setParseError("Couldn't read that file. Try again.");
-    reader.readAsText(file);
+    }
+    setParseResult(result);
   }
 
-  function handleConfirmImport() {
+  async function handleConfirmImport() {
     if (!parseResult) return;
     setImporting(true);
-    const summary = actions.importContacts(campaign.id, parseResult.rows);
+    setParseError("");
+    const validRows = parseResult.rows.filter((r) => r.validation === "valid");
+    const supabase = createClient();
+
+    const results = await Promise.all(
+      validRows.map((row) =>
+        supabase.rpc("admin_import_contact", {
+          p_campaign_id: campaign.id,
+          p_name: row.name,
+          p_phone: row.phone,
+          p_email: row.email ?? "",
+          p_external_customer_id: row.externalCustomerId ?? "",
+          p_segment: row.segment ?? "",
+        })
+      )
+    );
+    const failedCount = results.filter((r) => r.error).length;
+    const importedCount = results.length - failedCount;
+    const skippedCount = parseResult.totalRows - validRows.length;
+
     setImporting(false);
     setSuccessMessage(
-      `Imported ${summary.imported} contact${summary.imported === 1 ? "" : "s"}${
-        summary.skipped > 0 ? ` — ${summary.skipped} skipped` : ""
-      }.`
+      `Imported ${importedCount} contact${importedCount === 1 ? "" : "s"}` +
+        (skippedCount > 0 ? ` — ${skippedCount} skipped` : "") +
+        (failedCount > 0 ? ` — ${failedCount} failed` : "") +
+        "."
     );
     setParseResult(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    await refetch();
   }
 
   function handleDownloadExample() {
@@ -233,9 +345,9 @@ export default function AudiencePage() {
                 size="sm"
                 icon={revealed ? <EyeOff size={14} /> : <Eye size={14} />}
                 onClick={handleToggleReveal}
-                disabled={participantRows.length === 0}
+                disabled={participantRows.length === 0 || revealing}
               >
-                {revealed ? "Hide numbers" : "Reveal numbers"}
+                {revealing ? "Revealing..." : revealed ? "Hide numbers" : "Reveal numbers"}
               </Button>
               <Button
                 variant="secondary"
@@ -250,6 +362,11 @@ export default function AudiencePage() {
           }
         />
         <CardBody className="p-0">
+          {revealError ? (
+            <div className="p-5 pb-0">
+              <InlineBanner kind="danger">{revealError}</InlineBanner>
+            </div>
+          ) : null}
           {participantRows.length === 0 ? (
             <div className="p-5">
               <EmptyState
