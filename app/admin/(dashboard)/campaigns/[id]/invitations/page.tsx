@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { estimateSegments, mockSmsProvider } from "@/lib/adapters/sms";
+import { estimateSegments } from "@/lib/adapters/sms";
 import { createClient } from "@/lib/supabase/client";
 import { useAdminData } from "@/lib/hooks/useAdminData";
 import { generateSecureToken, sha256Hex } from "@/lib/supabase/tokens";
@@ -117,6 +117,7 @@ export default function InvitationsPage() {
       if (revealErr) throw revealErr;
       const phoneByContactId = new Map((revealed ?? []).map((r) => [r.id, r.phone]));
 
+      let sentCount = 0;
       for (const participant of eligible) {
         const phone = phoneByContactId.get(participant.contactId);
         if (!phone) continue;
@@ -134,27 +135,46 @@ export default function InvitationsPage() {
           .update({ invite_token_hash: tokenHash, token_expires_at: expiresAt })
           .eq("id", participant.id);
 
-        const result = await mockSmsProvider.sendSMS({ to: phone, body, senderId });
-        const now = new Date().toISOString();
-
-        const { data: invitationRow } = await supabase
+        // Insert the invitation row before sending so we have a real id to
+        // hand Dotgo as the request's own `id` — see lib/adapters/sms-dotgo.ts
+        // for why that matters for correlating its delivery-status webhook.
+        const { data: invitationRow, error: insertError } = await supabase
           .from("campaign_invitations")
           .insert({
             campaign_id: campaign.id,
             participant_id: participant.id,
-            provider_message_id: result.providerMessageId,
-            status: result.status === "failed" ? "failed" : "sent",
-            sent_at: result.status === "failed" ? null : now,
-            failed_at: result.status === "failed" ? now : null,
-            failure_reason: result.failureReason ?? null,
+            provider_message_id: "",
+            status: "queued",
           })
           .select("id")
           .single();
+        if (insertError || !invitationRow) continue;
+
+        const sendResponse = await fetch("/api/sms/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: phone, body, requestId: invitationRow.id, senderMask: senderId }),
+        });
+        const sendResult = (await sendResponse.json().catch(() => ({
+          ok: false,
+          errorReason: "Unexpected response from the send endpoint.",
+        }))) as { ok: true } | { ok: false; errorReason: string };
+        const now = new Date().toISOString();
+
+        await supabase
+          .from("campaign_invitations")
+          .update({
+            status: sendResult.ok ? "sent" : "failed",
+            sent_at: sendResult.ok ? now : null,
+            failed_at: sendResult.ok ? null : now,
+            failure_reason: sendResult.ok ? null : sendResult.errorReason,
+          })
+          .eq("id", invitationRow.id);
 
         await supabase
           .from("campaign_participants")
           .update({
-            participation_status: result.status === "failed" ? "invite_failed" : "invited",
+            participation_status: sendResult.ok ? "invited" : "invite_failed",
           })
           .eq("id", participant.id);
 
@@ -162,43 +182,17 @@ export default function InvitationsPage() {
           organisation_id: campaign.organisationId,
           campaign_id: campaign.id,
           actor_type: "system",
-          actor_name: "SMS provider (mock)",
+          actor_name: "Dotgo",
           action: "invitation_sent",
           entity_type: "campaign_participant",
           entity_id: participant.id,
-          metadata: { status: result.status },
+          metadata: { status: sendResult.ok ? "sent" : "failed" },
         });
 
-        // Simulate async delivery/failure a little later, matching the mock
-        // provider's own timers. Deliberately not refetch()'d automatically —
-        // a manual reload picks up the final status; live push would need a
-        // realtime subscription, which is a follow-up, not this stage.
-        if (result.status !== "failed" && invitationRow) {
-          const invitationId = invitationRow.id;
-          const participantId = participant.id;
-          const providerMessageId = result.providerMessageId;
-          setTimeout(async () => {
-            const status = await mockSmsProvider.getSMSStatus(providerMessageId);
-            const laterNow = new Date().toISOString();
-            const laterSupabase = createClient();
-            await laterSupabase
-              .from("campaign_invitations")
-              .update({
-                status,
-                delivered_at: status === "delivered" ? laterNow : null,
-                failed_at: status === "failed" ? laterNow : null,
-              })
-              .eq("id", invitationId);
-            if (status === "delivered" || status === "failed") {
-              await laterSupabase
-                .from("campaign_participants")
-                .update({
-                  participation_status: status === "delivered" ? "delivered" : "invite_failed",
-                })
-                .eq("id", participantId);
-            }
-          }, 2200);
-        }
+        if (sendResult.ok) sentCount += 1;
+        // Delivered/failed status now arrives via Dotgo's real delivery
+        // webhook (app/api/sms/dotgo-callback/route.ts), not a client-side
+        // timer — a manual reload picks up the final status once it lands.
       }
 
       await supabase.rpc("log_sms_batch_sent", {
@@ -207,7 +201,7 @@ export default function InvitationsPage() {
       });
 
       setSentBanner(
-        `Sent to ${eligible.length} of ${eligible.length} eligible participant${eligible.length === 1 ? "" : "s"}.`
+        `Sent to ${sentCount} of ${eligible.length} eligible participant${eligible.length === 1 ? "" : "s"}.`
       );
       setConfirmOpen(false);
       await refetch();
