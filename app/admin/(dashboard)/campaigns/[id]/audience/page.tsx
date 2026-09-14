@@ -15,6 +15,7 @@ import { ParticipationStatusBadge, Badge } from "@/components/ui/Badge";
 import { useCampaignDetail } from "../campaign-context";
 
 const MASKED_PHONE = "•••• ••• ••••";
+const PAGE_SIZE = 50;
 
 const VALIDATION_LABEL: Record<string, string> = {
   valid: "Valid",
@@ -50,6 +51,7 @@ export default function AudiencePage() {
   const [revealError, setRevealError] = useState("");
   const [revealedContacts, setRevealedContacts] = useState<Map<string, RevealedContact>>(new Map());
   const [segmentFilter, setSegmentFilter] = useState("all");
+  const [page, setPage] = useState(1);
 
   // Masked by default (contacts_list_masked() via useAdminData) — revealed
   // values are overlaid here from local page state only, never written back
@@ -85,6 +87,9 @@ export default function AudiencePage() {
   const visibleRows = participantRows.filter(
     (r) => segmentFilter === "all" || r.segment === segmentFilter
   );
+  const totalPages = Math.max(1, Math.ceil(visibleRows.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedRows = visibleRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   async function handleToggleReveal() {
     if (revealed) {
@@ -330,7 +335,10 @@ export default function AudiencePage() {
             <div className="flex flex-wrap items-center gap-2">
               <Select
                 value={segmentFilter}
-                onChange={(e) => setSegmentFilter(e.target.value)}
+                onChange={(e) => {
+                  setSegmentFilter(e.target.value);
+                  setPage(1);
+                }}
                 className="w-40 text-xs"
               >
                 <option value="all">All segments</option>
@@ -379,32 +387,63 @@ export default function AudiencePage() {
               <EmptyState title="No contacts in this segment" description="Try a different segment filter." />
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border text-xs uppercase tracking-wide text-foreground-subtle">
-                    <th className="px-5 py-3 font-medium">Name</th>
-                    <th className="px-5 py-3 font-medium">Phone</th>
-                    <th className="px-5 py-3 font-medium">Segment</th>
-                    <th className="px-5 py-3 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleRows.map((row) => (
-                    <tr key={row.participantId} className="border-b border-border last:border-0">
-                      <td className="px-5 py-3 font-medium text-foreground">{row.contact.name}</td>
-                      <td className="px-5 py-3 tabular-nums text-foreground-muted">
-                        {revealed ? row.contact.phone : MASKED_PHONE}
-                      </td>
-                      <td className="px-5 py-3 text-foreground-muted">{row.segment ?? "—"}</td>
-                      <td className="px-5 py-3">
-                        <ParticipationStatusBadge status={row.participationStatus} />
-                      </td>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-xs uppercase tracking-wide text-foreground-subtle">
+                      <th className="px-5 py-3 font-medium">Name</th>
+                      <th className="px-5 py-3 font-medium">Phone</th>
+                      <th className="px-5 py-3 font-medium">Segment</th>
+                      <th className="px-5 py-3 font-medium">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {pagedRows.map((row) => (
+                      <tr key={row.participantId} className="border-b border-border last:border-0">
+                        <td className="px-5 py-3 font-medium text-foreground">{row.contact.name}</td>
+                        <td className="px-5 py-3 tabular-nums text-foreground-muted">
+                          {revealed ? row.contact.phone : MASKED_PHONE}
+                        </td>
+                        <td className="px-5 py-3 text-foreground-muted">{row.segment ?? "—"}</td>
+                        <td className="px-5 py-3">
+                          <ParticipationStatusBadge status={row.participationStatus} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {totalPages > 1 ? (
+                <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-3">
+                  <p className="text-xs text-foreground-muted">
+                    Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, visibleRows.length)} of{" "}
+                    {visibleRows.length}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={safePage <= 1}
+                    >
+                      Previous
+                    </Button>
+                    <span className="text-xs text-foreground-muted">
+                      Page {safePage} of {totalPages}
+                    </span>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={safePage >= totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </>
           )}
         </CardBody>
       </Card>
