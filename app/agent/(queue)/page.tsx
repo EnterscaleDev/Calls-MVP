@@ -4,20 +4,17 @@ import { useState } from "react";
 import { ButtonLink, Button } from "@/components/ui/Button";
 import { Card, StatCard } from "@/components/ui/Card";
 import { AssignmentStatusBadge } from "@/components/ui/Badge";
-import { EmptyState, LoadingScreen } from "@/components/ui/States";
+import { EmptyState, LoadingScreen, ErrorState } from "@/components/ui/States";
 import { ProgressBar } from "@/components/ui/Progress";
 import { Modal } from "@/components/ui/Modal";
-import { useAgentSession } from "@/lib/auth";
-import { useStore } from "@/lib/store";
-import { getAgentQueue } from "@/lib/selectors";
-import type { AgentParticipantView } from "@/lib/types";
+import { useAgentData, type AgentQueueEntry } from "@/lib/hooks/useAgentData";
 import { formatDateTime } from "./_utils";
 
 function QueueCard({
   view,
   action,
 }: {
-  view: AgentParticipantView;
+  view: AgentQueueEntry;
   action?: React.ReactNode;
 }) {
   return (
@@ -52,9 +49,9 @@ function Section({
   renderAction,
 }: {
   title: string;
-  items: AgentParticipantView[];
+  items: AgentQueueEntry[];
   emptyLabel: string;
-  renderAction?: (view: AgentParticipantView) => React.ReactNode;
+  renderAction?: (view: AgentQueueEntry) => React.ReactNode;
 }) {
   return (
     <section className="mt-6">
@@ -76,17 +73,19 @@ function Section({
 }
 
 export default function AgentQueuePage() {
-  const { ready: sessionReady, session } = useAgentSession();
-  const { ready: storeReady, db } = useStore();
-  const [detailsView, setDetailsView] = useState<AgentParticipantView | null>(null);
+  const { data, loading, error } = useAgentData();
+  const [detailsView, setDetailsView] = useState<AgentQueueEntry | null>(null);
 
-  if (!sessionReady || !storeReady || !session) {
-    return <LoadingScreen label="Loading your queue..." />;
-  }
+  if (loading || !data) return <LoadingScreen label="Loading your queue..." />;
+  if (error) return <ErrorState title="Couldn't load your queue" description={error} />;
 
-  const queue = getAgentQueue(db, session.agentId);
-  const totalDueToday = queue.overdue.length + queue.dueNow.length + queue.completedToday.length;
-  const completedCount = queue.completedToday.length;
+  const overdue = data.queue.filter((v) => v.bucket === "overdue");
+  const dueNow = data.queue.filter((v) => v.bucket === "due_now");
+  const upcoming = data.queue.filter((v) => v.bucket === "upcoming");
+  const completedToday = data.queue.filter((v) => v.bucket === "completed_today");
+
+  const totalDueToday = overdue.length + dueNow.length + completedToday.length;
+  const completedCount = completedToday.length;
   const progress = totalDueToday > 0 ? completedCount / totalDueToday : 0;
 
   return (
@@ -108,16 +107,16 @@ export default function AgentQueuePage() {
         </StatCard>
         <StatCard
           label="Overdue calls"
-          value={queue.overdue.length}
-          tone={queue.overdue.length > 0 ? "danger" : "default"}
+          value={overdue.length}
+          tone={overdue.length > 0 ? "danger" : "default"}
         />
-        <StatCard label="Due now" value={queue.dueNow.length} />
-        <StatCard label="Upcoming" value={queue.upcoming.length} />
+        <StatCard label="Due now" value={dueNow.length} />
+        <StatCard label="Upcoming" value={upcoming.length} />
       </div>
 
       <Section
         title="Overdue"
-        items={queue.overdue}
+        items={overdue}
         emptyLabel="No overdue interviews — nice work"
         renderAction={(view) => (
           <ButtonLink href={`/agent/call/${view.assignmentId}`} size="sm" className="w-full justify-center">
@@ -128,7 +127,7 @@ export default function AgentQueuePage() {
 
       <Section
         title="Due Now"
-        items={queue.dueNow}
+        items={dueNow}
         emptyLabel="Nothing due right now"
         renderAction={(view) => (
           <ButtonLink href={`/agent/call/${view.assignmentId}`} size="sm" className="w-full justify-center">
@@ -139,7 +138,7 @@ export default function AgentQueuePage() {
 
       <Section
         title="Upcoming"
-        items={queue.upcoming}
+        items={upcoming}
         emptyLabel="Nothing else scheduled yet"
         renderAction={(view) => (
           <Button
@@ -153,7 +152,7 @@ export default function AgentQueuePage() {
         )}
       />
 
-      <Section title="Completed" items={queue.completedToday} emptyLabel="Nothing completed yet today" />
+      <Section title="Completed" items={completedToday} emptyLabel="Nothing completed yet today" />
 
       <Modal open={!!detailsView} onClose={() => setDetailsView(null)} title="Interview details">
         {detailsView ? (

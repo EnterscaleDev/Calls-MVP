@@ -42,5 +42,10 @@ export const OUTCOME_OPTIONS: { value: CallOutcome; label: string }[] = [
 ];
 
 export function outcomeRequiresNotes(outcome: CallOutcome | ""): boolean {
-  return outcome === "completed" || outcome === "follow_up_required" || outcome === "technical_failure";
+  return (
+    outcome === "completed" ||
+    outcome === "follow_up_required" ||
+    outcome === "technical_failure" ||
+    outcome === "reschedule_requested"
+  );
 }

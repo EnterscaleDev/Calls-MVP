@@ -859,6 +859,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      agent_submit_call_outcome: {
+        Args: {
+          p_call_attempt_id: string
+          p_disposition: Database["public"]["Enums"]["call_outcome_enum"]
+          p_notes: string
+        }
+        Returns: undefined
+      }
       admin_assign_participant: {
         Args: { p_agent_id: string; p_campaign_id: string; p_participant_id: string }
         Returns: string

@@ -4,12 +4,22 @@ import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { OutcomeBadge, Badge } from "@/components/ui/Badge";
 import { Field, Select } from "@/components/ui/Form";
-import { EmptyState, LoadingScreen } from "@/components/ui/States";
+import { EmptyState, LoadingScreen, ErrorState } from "@/components/ui/States";
 import { Modal } from "@/components/ui/Modal";
-import { useAgentSession } from "@/lib/auth";
-import { useStore } from "@/lib/store";
-import { getAgentCallHistory, type AgentHistoryRow } from "@/lib/selectors";
+import { useAgentData } from "@/lib/hooks/useAgentData";
 import { formatDateTime, formatElapsed, OUTCOME_OPTIONS } from "../_utils";
+import type { CallOutcome } from "@/lib/types";
+
+interface HistoryRow {
+  callAttemptId: string;
+  campaignName: string;
+  participantAlias: string;
+  startedAt: string;
+  durationSeconds?: number;
+  disposition?: CallOutcome;
+  notes?: string;
+  followUpRequired: boolean;
+}
 
 function isToday(iso: string): boolean {
   const d = new Date(iso);
@@ -22,28 +32,40 @@ function isToday(iso: string): boolean {
 }
 
 export default function AgentHistoryPage() {
-  const { ready: sessionReady, session } = useAgentSession();
-  const { ready: storeReady, db } = useStore();
+  const { data, loading, error } = useAgentData();
   const [todayOnly, setTodayOnly] = useState(false);
   const [campaignFilter, setCampaignFilter] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState("");
-  const [selectedRow, setSelectedRow] = useState<AgentHistoryRow | null>(null);
+  const [selectedRow, setSelectedRow] = useState<HistoryRow | null>(null);
 
-  const ready = sessionReady && storeReady && !!session;
-  const rows = useMemo(
-    () => (ready ? getAgentCallHistory(db, session!.agentId) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ready, db]
-  );
+  const rows = useMemo<HistoryRow[]>(() => {
+    if (!data) return [];
+    const byAssignment = new Map(data.queue.map((q) => [q.assignmentId, q]));
+    return data.callAttempts
+      .filter((a) => a.status === "ended")
+      .map((a) => {
+        const queueEntry = byAssignment.get(a.assignmentId);
+        return {
+          callAttemptId: a.id,
+          campaignName: queueEntry?.campaignName ?? "Unknown campaign",
+          participantAlias: queueEntry?.participantAlias ?? "Participant",
+          startedAt: a.startedAt,
+          durationSeconds: a.durationSeconds,
+          disposition: a.disposition,
+          notes: a.notes,
+          followUpRequired: a.disposition === "follow_up_required",
+        };
+      })
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  }, [data]);
 
   const campaignOptions = useMemo(
     () => Array.from(new Set(rows.map((r) => r.campaignName))).sort((a, b) => a.localeCompare(b)),
     [rows]
   );
 
-  if (!sessionReady || !storeReady || !session) {
-    return <LoadingScreen label="Loading your history..." />;
-  }
+  if (loading || !data) return <LoadingScreen label="Loading your history..." />;
+  if (error) return <ErrorState title="Couldn't load your history" description={error} />;
 
   const filtered = rows.filter((r) => {
     if (todayOnly && !isToday(r.startedAt)) return false;

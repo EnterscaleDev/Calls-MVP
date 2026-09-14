@@ -1,19 +1,37 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Circle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Field, Select, Textarea } from "@/components/ui/Form";
 import { ErrorState, LoadingScreen } from "@/components/ui/States";
 import { Modal } from "@/components/ui/Modal";
-import { useAgentSession } from "@/lib/auth";
-import { useStore } from "@/lib/store";
-import { getAgentQueue, getAvailableSlots, getCallScript, getRecordingForAttempt } from "@/lib/selectors";
-import type { CallAttemptStatus, CallOutcome } from "@/lib/types";
+import { createClient } from "@/lib/supabase/client";
+import { mockTelephonyProvider, type CallProgressEvent } from "@/lib/adapters/telephony";
+import type { AssignmentStatus, CallAttemptStatus, CallOutcome, CallScriptSection } from "@/lib/types";
 import { formatDateTime, formatElapsed, OUTCOME_OPTIONS, outcomeRequiresNotes } from "../../_utils";
 
 type LocalCallState = "idle" | CallAttemptStatus;
+
+interface CallDetail {
+  participantAlias: string;
+  campaignName: string;
+  scheduledStart: string;
+  estimatedDurationMinutes: number;
+  recordingEnabled: boolean;
+  organisationId: string;
+}
+
+interface AssignmentRow {
+  id: string;
+  participantId: string;
+  agentId: string;
+  campaignId: string;
+  status: AssignmentStatus;
+}
+
+type LoadState = "loading" | "ready" | "unavailable" | "error";
 
 export default function CallWorkspacePage({
   params,
@@ -22,11 +40,14 @@ export default function CallWorkspacePage({
 }) {
   const { assignmentId } = use(params);
   const router = useRouter();
-  const { ready: sessionReady, session } = useAgentSession();
-  const { ready: storeReady, db, actions } = useStore();
 
-  // --- All hooks are declared unconditionally, before any early return, so
-  // render order never changes across the loading/error/happy paths. ---
+  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [detail, setDetail] = useState<CallDetail | null>(null);
+  const [assignment, setAssignment] = useState<AssignmentRow | null>(null);
+  const [scriptSections, setScriptSections] = useState<CallScriptSection[]>([]);
+  const [actorUserId, setActorUserId] = useState<string | null>(null);
+  const [actorName, setActorName] = useState<string>("Agent");
+
   const [callState, setCallState] = useState<LocalCallState>("idle");
   const [callAttemptId, setCallAttemptId] = useState<string | null>(null);
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
@@ -36,32 +57,83 @@ export default function CallWorkspacePage({
   const [dispositionOpen, setDispositionOpen] = useState(false);
   const [outcome, setOutcome] = useState<CallOutcome | "">("");
   const [outcomeError, setOutcomeError] = useState("");
-  const [selectedSlot, setSelectedSlot] = useState<{ start: string; end: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const ready = sessionReady && storeReady && !!session;
+  const connectedAtRef = useRef<number | null>(null);
 
-  const assignment = ready ? db.assignments.find((a) => a.id === assignmentId) : undefined;
-  const ownedByAgent = ready && !!assignment && assignment.agentId === session!.agentId;
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoadState("loading");
+      const supabase = createClient();
+      const [detailRes, assignmentRes, userRes] = await Promise.all([
+        supabase.rpc("agent_participant_detail", { p_assignment_id: assignmentId }),
+        supabase
+          .from("call_assignments")
+          .select("id, participant_id, agent_id, campaign_id, status")
+          .eq("id", assignmentId)
+          .maybeSingle(),
+        supabase.auth.getUser(),
+      ]);
+      if (cancelled) return;
 
-  const queue = ready ? getAgentQueue(db, session!.agentId) : undefined;
-  const view =
-    ownedByAgent && queue
-      ? [...queue.overdue, ...queue.dueNow, ...queue.upcoming, ...queue.completedToday].find(
-          (v) => v.assignmentId === assignmentId
-        )
-      : undefined;
+      const detailRow = detailRes.data?.[0];
+      if (detailRes.error || assignmentRes.error || !detailRow || !assignmentRes.data) {
+        setLoadState("error");
+        return;
+      }
 
-  const campaign = ready && assignment ? db.campaigns.find((c) => c.id === assignment.campaignId) : undefined;
-  const script = ready && campaign ? getCallScript(db, campaign.id) : undefined;
-  const recording =
-    ready && campaign?.recordingEnabled && callAttemptId ? getRecordingForAttempt(db, callAttemptId) : undefined;
+      const user = userRes.data.user;
+      const [{ data: campaignRow }, { data: sectionRows }, { data: profileRow }] = await Promise.all([
+        supabase
+          .from("campaigns")
+          .select("estimated_duration_minutes, organisation_id")
+          .eq("id", detailRow.campaign_id)
+          .maybeSingle(),
+        supabase
+          .from("call_script_sections")
+          .select("id, title, instructions, questions, position")
+          .eq("campaign_id", detailRow.campaign_id)
+          .order("position"),
+        user
+          ? supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+      if (cancelled) return;
 
-  const slots = useMemo(
-    () => (campaign ? getAvailableSlots(campaign, 5) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [campaign?.id]
-  );
+      setDetail({
+        participantAlias: detailRow.participant_alias,
+        campaignName: detailRow.campaign_name,
+        scheduledStart: detailRow.scheduled_start,
+        estimatedDurationMinutes: campaignRow?.estimated_duration_minutes ?? 30,
+        recordingEnabled: detailRow.recording_enabled,
+        organisationId: campaignRow?.organisation_id ?? "",
+      });
+      const row: AssignmentRow = {
+        id: assignmentRes.data.id,
+        participantId: assignmentRes.data.participant_id,
+        agentId: assignmentRes.data.agent_id,
+        campaignId: assignmentRes.data.campaign_id,
+        status: assignmentRes.data.status,
+      };
+      setAssignment(row);
+      setScriptSections(
+        (sectionRows ?? []).map((r) => ({
+          id: r.id,
+          title: r.title,
+          instructions: r.instructions ?? undefined,
+          questions: r.questions ?? [],
+        }))
+      );
+      setActorUserId(user?.id ?? null);
+      setActorName(profileRow?.display_name ?? "Agent");
+      setLoadState(row.status === "assigned" || row.status === "in_progress" ? "ready" : "unavailable");
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [assignmentId]);
 
   useEffect(() => {
     if (callState !== "connected" || connectedAt === null) return;
@@ -80,33 +152,22 @@ export default function CallWorkspacePage({
     return () => document.removeEventListener("keydown", onKey);
   }, [dispositionOpen]);
 
-  if (!ready) {
+  if (loadState === "loading") {
     return <LoadingScreen label="Loading..." />;
   }
 
-  if (!assignment) {
+  if (loadState === "error") {
     return (
       <div className="mx-auto max-w-lg px-4 py-10">
         <ErrorState
           title="We couldn't find that interview"
-          description="This call may have been removed or the link is incorrect."
+          description="This call may have been removed, reassigned, or isn't yours to view."
         />
       </div>
     );
   }
 
-  if (!ownedByAgent) {
-    return (
-      <div className="mx-auto max-w-lg px-4 py-10">
-        <ErrorState
-          title="This isn't your interview"
-          description="This call is assigned to someone else. Head back to your queue to find your own calls."
-        />
-      </div>
-    );
-  }
-
-  if (!view) {
+  if (loadState === "unavailable" || !detail || !assignment) {
     return (
       <div className="mx-auto max-w-lg px-4 py-10">
         <ErrorState
@@ -118,25 +179,82 @@ export default function CallWorkspacePage({
   }
 
   async function handleStartCall() {
+    if (!assignment || !detail) return;
     setCallState("preparing");
     try {
-      const id = await actions.startCallAttempt(assignmentId, (status) => {
-        setCallState(status);
-        if (status === "connected") setConnectedAt(Date.now());
-      });
-      setCallAttemptId(id);
+      const supabase = createClient();
+      const { data: attemptRow, error: insertError } = await supabase
+        .from("call_attempts")
+        .insert({
+          campaign_id: assignment.campaignId,
+          participant_id: assignment.participantId,
+          assignment_id: assignment.id,
+          agent_id: assignment.agentId,
+          status: "preparing",
+          started_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      if (insertError || !attemptRow) throw insertError ?? new Error("Failed to start call");
+      const attemptId = attemptRow.id;
+      setCallAttemptId(attemptId);
+      connectedAtRef.current = null;
+
+      await supabase.from("call_assignments").update({ status: "in_progress" }).eq("id", assignment.id);
+
+      if (detail.organisationId) {
+        await supabase.from("audit_events").insert({
+          organisation_id: detail.organisationId,
+          campaign_id: assignment.campaignId,
+          actor_type: "agent",
+          actor_user_id: actorUserId,
+          actor_name: actorName,
+          action: "call_initiated",
+          entity_type: "call_attempt",
+          entity_id: attemptId,
+        });
+      }
+
+      const { providerCallId } = await mockTelephonyProvider.initiateMaskedCall(
+        assignment.id,
+        async (event: CallProgressEvent) => {
+          setCallState(event);
+          const patch: { status: CallProgressEvent; connected_at?: string } = { status: event };
+          if (event === "connected") {
+            const now = Date.now();
+            connectedAtRef.current = now;
+            setConnectedAt(now);
+            patch.connected_at = new Date().toISOString();
+          }
+          // supabase-js query builders are lazy thenables — the request is
+          // only actually sent once awaited/`.then()`-ed, so this must be
+          // awaited even though the caller (mockTelephonyProvider) doesn't
+          // await onProgress itself.
+          await supabase.from("call_attempts").update(patch).eq("id", attemptId);
+        }
+      );
+
+      await supabase.from("call_attempts").update({ provider_call_id: providerCallId }).eq("id", attemptId);
     } catch {
       setCallState("failed");
     }
   }
 
-  function handleEndCall(attemptId: string) {
-    actions.endCallAttempt(attemptId);
+  async function handleEndCall(attemptId: string) {
+    const supabase = createClient();
+    const now = new Date().toISOString();
+    const durationSeconds = connectedAtRef.current
+      ? Math.max(1, Math.round((Date.now() - connectedAtRef.current) / 1000))
+      : 0;
+    await supabase
+      .from("call_attempts")
+      .update({ status: "ended", ended_at: now, duration_seconds: durationSeconds })
+      .eq("id", attemptId);
     setCallState("ended");
     setDispositionOpen(true);
   }
 
-  function handleSubmitOutcome() {
+  async function handleSubmitOutcome() {
     if (!callAttemptId) return;
     if (!outcome) {
       setOutcomeError("Select an outcome.");
@@ -146,22 +264,24 @@ export default function CallWorkspacePage({
       setOutcomeError("Notes are required for this outcome.");
       return;
     }
-    if (outcome === "reschedule_requested" && !selectedSlot) {
-      setOutcomeError("Choose a new time for this participant.");
-      return;
-    }
     setOutcomeError("");
     setSubmitting(true);
-    actions.submitCallOutcome(
-      callAttemptId,
-      outcome,
-      notes.trim(),
-      outcome === "reschedule_requested" && selectedSlot ? selectedSlot : undefined
-    );
+    const supabase = createClient();
+    const { error: rpcError } = await supabase.rpc("agent_submit_call_outcome", {
+      p_call_attempt_id: callAttemptId,
+      p_disposition: outcome,
+      p_notes: notes.trim(),
+    });
+    setSubmitting(false);
+    if (rpcError) {
+      setOutcomeError(rpcError.message);
+      return;
+    }
     router.push("/agent");
   }
 
   const inCallWorkspace = callState !== "idle";
+  const isRecording = detail.recordingEnabled && callState === "connected";
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4 py-4 pb-28">
@@ -169,22 +289,20 @@ export default function CallWorkspacePage({
       <div className="rounded-[8px] border border-border bg-surface p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-base font-semibold text-foreground">{view.participantAlias}</p>
-            <p className="text-sm text-foreground-muted">{view.campaignName}</p>
+            <p className="text-base font-semibold text-foreground">{detail.participantAlias}</p>
+            <p className="text-sm text-foreground-muted">{detail.campaignName}</p>
           </div>
           <CallStatusPill state={callState} />
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground-muted">
-          <span>Scheduled {formatDateTime(view.scheduledStart)}</span>
+          <span>Scheduled {formatDateTime(detail.scheduledStart)}</span>
           <span aria-hidden="true">&middot;</span>
-          <span>{view.estimatedDurationMinutes} min expected</span>
+          <span>{detail.estimatedDurationMinutes} min expected</span>
         </div>
         {callState === "connected" || callState === "ended" ? (
           <p className="mt-2 text-2xl font-semibold tabular-nums text-foreground">{formatElapsed(elapsed)}</p>
         ) : null}
-        {campaign?.recordingEnabled && callState === "connected" ? (
-          <RecordingIndicator status={recording?.status} />
-        ) : null}
+        {isRecording ? <RecordingIndicator /> : null}
       </div>
 
       {/* Primary action / progress states */}
@@ -242,11 +360,11 @@ export default function CallWorkspacePage({
       <div className="mt-4 grid flex-1 grid-cols-1 gap-4 md:grid-cols-2">
         <div className="rounded-[8px] border border-border bg-surface p-4">
           <h2 className="text-sm font-semibold text-foreground">Call script</h2>
-          {!script ? (
+          {scriptSections.length === 0 ? (
             <p className="mt-2 text-sm text-foreground-muted">No script has been set up for this campaign yet.</p>
           ) : (
             <div className="mt-3 flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-1">
-              {script.sections.map((section) => {
+              {scriptSections.map((section) => {
                 const isDone = doneSections.has(section.id);
                 return (
                   <div key={section.id} className="rounded-lg border border-border p-3">
@@ -338,28 +456,10 @@ export default function CallWorkspacePage({
           </Field>
 
           {outcome === "reschedule_requested" ? (
-            <Field label="New time" required hint="Pick the next slot that works for the participant.">
-              <div className="flex max-h-48 flex-col gap-1.5 overflow-y-auto">
-                {slots.map((slot, i) => {
-                  const startIso = slot.start.toISOString();
-                  const isSelected = selectedSlot?.start === startIso;
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setSelectedSlot({ start: startIso, end: slot.end.toISOString() })}
-                      className={`rounded-[5px] border px-3 py-2 text-left text-sm ${
-                        isSelected
-                          ? "border-primary bg-primary-soft text-primary"
-                          : "border-border bg-surface text-foreground hover:bg-surface-muted"
-                      }`}
-                    >
-                      {formatDateTime(startIso)}
-                    </button>
-                  );
-                })}
-              </div>
-            </Field>
+            <p className="rounded-[6px] border border-border bg-surface-muted px-3 py-2 text-xs text-foreground-muted">
+              This won&apos;t book a new time automatically — note what the participant asked for below. They
+              can pick a new time from their own link, or an admin can reschedule them.
+            </p>
           ) : null}
 
           <Field
@@ -414,17 +514,11 @@ function CallStatusPill({ state }: { state: LocalCallState }) {
   );
 }
 
-function RecordingIndicator({ status }: { status?: "recording" | "available" | "failed" | "unavailable" }) {
-  if (!status || status === "recording") {
-    return (
-      <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-danger">
-        <Circle size={8} className="fill-current" />
-        Recording
-      </div>
-    );
-  }
-  if (status === "available") {
-    return <p className="mt-2 text-xs font-medium text-foreground-muted">Recording saved</p>;
-  }
-  return <p className="mt-2 text-xs font-medium text-foreground-muted">Recording unavailable</p>;
+function RecordingIndicator() {
+  return (
+    <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-danger">
+      <Circle size={8} className="fill-current" />
+      Recording
+    </div>
+  );
 }
