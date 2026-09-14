@@ -1,14 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useStore, estimateSegments } from "@/lib/store";
-import { useAdminSession } from "@/lib/auth";
+import { estimateSegments, mockSmsProvider } from "@/lib/adapters/sms";
+import { createClient } from "@/lib/supabase/client";
+import { useAdminData } from "@/lib/hooks/useAdminData";
+import { generateSecureToken, sha256Hex } from "@/lib/supabase/tokens";
 import { getAuditLog } from "@/lib/selectors";
 import { Card, CardHeader, CardBody, StatCard } from "@/components/ui/Card";
 import { Field, Input, Textarea } from "@/components/ui/Form";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { InlineBanner, EmptyState } from "@/components/ui/States";
+import { InlineBanner, EmptyState, LoadingScreen, ErrorState } from "@/components/ui/States";
 import { InvitationStatusBadge } from "@/components/ui/Badge";
 import { formatDateTime, formatPercent } from "../../../_lib/format";
 import { SMS_CREDIT_COST_PER_SEGMENT } from "../../../_lib/credits";
@@ -16,12 +18,11 @@ import { useCampaignDetail } from "../campaign-context";
 
 const DEFAULT_BODY =
   "Hi {{first_name}}, we'd love to hear about your experience. Book a short call here: {{campaign_link}}";
+const TOKEN_EXPIRY_DAYS = 30;
 
 export default function InvitationsPage() {
   const campaign = useCampaignDetail();
-  const { db, actions } = useStore();
-  const { session } = useAdminSession();
-  const actor = session?.name ?? "Toni";
+  const { data: db, loading, error, refetch } = useAdminData();
 
   const [senderId, setSenderId] = useState(campaign.senderId);
   const [body, setBody] = useState(DEFAULT_BODY);
@@ -35,20 +36,17 @@ export default function InvitationsPage() {
   const [sendError, setSendError] = useState("");
   const [sentBanner, setSentBanner] = useState("");
 
-  const participants = db.participants.filter((p) => p.campaignId === campaign.id);
-  const eligibleCount = participants.filter((p) => p.participationStatus === "imported").length;
-
   const segments = estimateSegments(body);
-
   const previewText = useMemo(() => {
     return body
       .replaceAll("{{first_name}}", "Jamie")
       .replaceAll("{{campaign_link}}", "https://calls.example/i/abc123");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [body]);
-
   const previewSegments = estimateSegments(previewText);
 
   const invitationRows = useMemo(() => {
+    if (!db) return [];
     return [...db.invitations]
       .filter((inv) => inv.campaignId === campaign.id)
       .sort((a, b) => (b.sentAt ?? "").localeCompare(a.sentAt ?? ""))
@@ -57,7 +55,20 @@ export default function InvitationsPage() {
         const contact = participant ? db.contacts.find((c) => c.id === participant.contactId) : undefined;
         return { invitation: inv, contactName: contact?.name ?? "Unknown contact" };
       });
-  }, [db.invitations, db.participants, db.contacts, campaign.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db, campaign.id]);
+
+  const sendHistory = useMemo(() => {
+    if (!db) return [];
+    return getAuditLog(db, campaign.id).filter((e) => e.action === "sms_batch_sent");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db, campaign.id]);
+
+  if (loading || !db) return <LoadingScreen label="Loading invitations..." />;
+  if (error) return <ErrorState title="Couldn't load invitations" description={error} />;
+
+  const participants = db.participants.filter((p) => p.campaignId === campaign.id);
+  const eligibleCount = participants.filter((p) => p.participationStatus === "imported").length;
 
   const failedCount = invitationRows.filter((r) => r.invitation.status === "failed").length;
   const queuedCount = invitationRows.filter((r) => r.invitation.status === "queued").length;
@@ -75,13 +86,9 @@ export default function InvitationsPage() {
   const estimatedCost = eligibleCount * segments * SMS_CREDIT_COST_PER_SEGMENT;
   const creditAfterSend = db.orgCredits.sms - estimatedCost;
 
-  const sendHistory = useMemo(
-    () => getAuditLog(db, campaign.id).filter((e) => e.action === "sms_batch_sent"),
-    [db, campaign.id]
-  );
-
   function handleSaveDraft() {
-    actions.saveSmsDraft(campaign.id, body, incentiveText, senderId);
+    // No real draft storage exists yet (matches the mock, which never
+    // persisted this either) — purely a local acknowledgment.
     setDraftSaved(true);
     setTimeout(() => setDraftSaved(false), 2500);
   }
@@ -95,9 +102,115 @@ export default function InvitationsPage() {
     setSending(true);
     setSendError("");
     try {
-      const summary = await actions.sendInvitations(campaign.id, body, senderId, actor);
-      setSentBanner(`Sent to ${summary.sent} of ${summary.eligible} eligible participant${summary.eligible === 1 ? "" : "s"}.`);
+      const supabase = createClient();
+      const eligible = participants.filter((p) => p.participationStatus === "imported");
+
+      // Sending needs the raw phone to hand to the (still-mocked) SMS
+      // adapter — reveal is the one sanctioned, audited path to it. This
+      // fires one contact_numbers_revealed audit row for the batch, same as
+      // clicking Reveal on the Audience tab would.
+      const contactIds = eligible.map((p) => p.contactId);
+      const { data: revealed, error: revealErr } = await supabase.rpc("contacts_reveal", {
+        p_contact_ids: contactIds,
+        p_campaign_id: campaign.id,
+      });
+      if (revealErr) throw revealErr;
+      const phoneByContactId = new Map((revealed ?? []).map((r) => [r.id, r.phone]));
+
+      for (const participant of eligible) {
+        const phone = phoneByContactId.get(participant.contactId);
+        if (!phone) continue;
+
+        // Fresh token minted at send time, not at import — link validity
+        // starts counting from when it's actually distributed, not from
+        // whenever the contact happened to be uploaded.
+        const token = generateSecureToken();
+        const tokenHash = await sha256Hex(token);
+        const expiresAt = new Date(
+          Date.now() + TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
+        ).toISOString();
+        await supabase
+          .from("campaign_participants")
+          .update({ invite_token_hash: tokenHash, token_expires_at: expiresAt })
+          .eq("id", participant.id);
+
+        const result = await mockSmsProvider.sendSMS({ to: phone, body, senderId });
+        const now = new Date().toISOString();
+
+        const { data: invitationRow } = await supabase
+          .from("campaign_invitations")
+          .insert({
+            campaign_id: campaign.id,
+            participant_id: participant.id,
+            provider_message_id: result.providerMessageId,
+            status: result.status === "failed" ? "failed" : "sent",
+            sent_at: result.status === "failed" ? null : now,
+            failed_at: result.status === "failed" ? now : null,
+            failure_reason: result.failureReason ?? null,
+          })
+          .select("id")
+          .single();
+
+        await supabase
+          .from("campaign_participants")
+          .update({
+            participation_status: result.status === "failed" ? "invite_failed" : "invited",
+          })
+          .eq("id", participant.id);
+
+        await supabase.from("audit_events").insert({
+          organisation_id: campaign.organisationId,
+          campaign_id: campaign.id,
+          actor_type: "system",
+          actor_name: "SMS provider (mock)",
+          action: "invitation_sent",
+          entity_type: "campaign_participant",
+          entity_id: participant.id,
+          metadata: { status: result.status },
+        });
+
+        // Simulate async delivery/failure a little later, matching the mock
+        // provider's own timers. Deliberately not refetch()'d automatically —
+        // a manual reload picks up the final status; live push would need a
+        // realtime subscription, which is a follow-up, not this stage.
+        if (result.status !== "failed" && invitationRow) {
+          const invitationId = invitationRow.id;
+          const participantId = participant.id;
+          const providerMessageId = result.providerMessageId;
+          setTimeout(async () => {
+            const status = await mockSmsProvider.getSMSStatus(providerMessageId);
+            const laterNow = new Date().toISOString();
+            const laterSupabase = createClient();
+            await laterSupabase
+              .from("campaign_invitations")
+              .update({
+                status,
+                delivered_at: status === "delivered" ? laterNow : null,
+                failed_at: status === "failed" ? laterNow : null,
+              })
+              .eq("id", invitationId);
+            if (status === "delivered" || status === "failed") {
+              await laterSupabase
+                .from("campaign_participants")
+                .update({
+                  participation_status: status === "delivered" ? "delivered" : "invite_failed",
+                })
+                .eq("id", participantId);
+            }
+          }, 2200);
+        }
+      }
+
+      await supabase.rpc("log_sms_batch_sent", {
+        p_campaign_id: campaign.id,
+        p_recipient_count: eligible.length,
+      });
+
+      setSentBanner(
+        `Sent to ${eligible.length} of ${eligible.length} eligible participant${eligible.length === 1 ? "" : "s"}.`
+      );
       setConfirmOpen(false);
+      await refetch();
     } catch {
       setSendError("Something went wrong sending invitations. Try again.");
     } finally {

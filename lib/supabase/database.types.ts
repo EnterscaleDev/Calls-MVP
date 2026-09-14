@@ -859,6 +859,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      log_sms_batch_sent: {
+        Args: { p_campaign_id: string; p_recipient_count: number }
+        Returns: undefined
+      }
       admin_check_duplicate_phones: {
         Args: { p_campaign_id: string; p_phones: string[] }
         Returns: string[]

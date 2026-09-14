@@ -362,7 +362,7 @@ export function getCallScript(db: MockDatabase, campaignId: string) {
   return db.callScripts.find((s) => s.campaignId === campaignId);
 }
 
-export function getAuditLog(db: MockDatabase, campaignId?: string) {
+export function getAuditLog(db: Pick<MockDatabase, "auditEvents">, campaignId?: string) {
   return [...db.auditEvents]
     .filter((e) => !campaignId || e.campaignId === campaignId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

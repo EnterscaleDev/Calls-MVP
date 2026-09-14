@@ -13,7 +13,9 @@ import type {
   Contact,
   AgentProfile,
   Recording,
+  AuditEvent,
 } from "@/lib/types";
+import type { OrgCredits } from "@/lib/mock-data";
 
 type CampaignRow = Database["public"]["Tables"]["campaigns"]["Row"];
 type ParticipantRow = Pick<
@@ -26,6 +28,8 @@ type BookingRow = Database["public"]["Tables"]["interview_bookings"]["Row"];
 type AssignmentRow = Database["public"]["Tables"]["call_assignments"]["Row"];
 type AgentRow = Database["public"]["Tables"]["agent_profiles"]["Row"];
 type RecordingRow = Database["public"]["Tables"]["recordings"]["Row"];
+type AuditEventRow = Database["public"]["Tables"]["audit_events"]["Row"];
+type OrgCreditsRow = Database["public"]["Tables"]["org_credits"]["Row"];
 type MaskedContactRow =
   Database["public"]["Functions"]["contacts_list_masked"]["Returns"][number];
 
@@ -150,6 +154,21 @@ function mapRecording(row: RecordingRow): Recording {
   };
 }
 
+function mapAuditEvent(row: AuditEventRow): AuditEvent {
+  return {
+    id: row.id,
+    organisationId: row.organisation_id,
+    campaignId: row.campaign_id ?? undefined,
+    actorType: row.actor_type,
+    actorName: row.actor_name,
+    action: row.action,
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    metadata: (row.metadata as Record<string, string | number | boolean>) ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
 // contacts_list_masked() is the only admin-facing read path for contact data
 // (the raw `contacts` table has zero RLS grant for any client role) — real
 // name, masked phone. The masked phone string doubles as this shape's `phone`
@@ -177,6 +196,8 @@ export interface AdminData {
   contacts: Contact[];
   agents: AgentProfile[];
   recordings: Recording[];
+  auditEvents: AuditEvent[];
+  orgCredits: OrgCredits;
 }
 
 const PARTICIPANT_COLUMNS =
@@ -200,18 +221,31 @@ export function useAdminData() {
     setLoading(true);
     setError(null);
     const supabase = createClient();
-    const [campaigns, participants, invitations, callAttempts, bookings, assignments, agents, recordings, maskedContacts] =
-      await Promise.all([
-        supabase.from("campaigns").select("*"),
-        supabase.from("campaign_participants").select(PARTICIPANT_COLUMNS),
-        supabase.from("campaign_invitations").select("*"),
-        supabase.from("call_attempts").select("*"),
-        supabase.from("interview_bookings").select("*"),
-        supabase.from("call_assignments").select("*"),
-        supabase.from("agent_profiles").select("*"),
-        supabase.from("recordings").select("*"),
-        supabase.rpc("contacts_list_masked"),
-      ]);
+    const [
+      campaigns,
+      participants,
+      invitations,
+      callAttempts,
+      bookings,
+      assignments,
+      agents,
+      recordings,
+      maskedContacts,
+      auditEvents,
+      orgCredits,
+    ] = await Promise.all([
+      supabase.from("campaigns").select("*"),
+      supabase.from("campaign_participants").select(PARTICIPANT_COLUMNS),
+      supabase.from("campaign_invitations").select("*"),
+      supabase.from("call_attempts").select("*"),
+      supabase.from("interview_bookings").select("*"),
+      supabase.from("call_assignments").select("*"),
+      supabase.from("agent_profiles").select("*"),
+      supabase.from("recordings").select("*"),
+      supabase.rpc("contacts_list_masked"),
+      supabase.from("audit_events").select("*"),
+      supabase.from("org_credits").select("*").single(),
+    ]);
 
     const firstError =
       campaigns.error ||
@@ -222,13 +256,16 @@ export function useAdminData() {
       assignments.error ||
       agents.error ||
       recordings.error ||
-      maskedContacts.error;
+      maskedContacts.error ||
+      auditEvents.error ||
+      orgCredits.error;
     if (firstError) {
       setError(firstError.message);
       setLoading(false);
       return;
     }
 
+    const orgCreditsRow = orgCredits.data as OrgCreditsRow;
     setData({
       campaigns: (campaigns.data ?? []).map(mapCampaign),
       participants: ((participants.data ?? []) as ParticipantRow[]).map(mapParticipant),
@@ -239,6 +276,8 @@ export function useAdminData() {
       agents: (agents.data ?? []).map(mapAgent),
       recordings: (recordings.data ?? []).map(mapRecording),
       contacts: (maskedContacts.data ?? []).map(mapMaskedContact),
+      auditEvents: (auditEvents.data ?? []).map(mapAuditEvent),
+      orgCredits: { sms: orgCreditsRow.sms, voiceMinutes: orgCreditsRow.voice_minutes },
     });
     setLoading(false);
   }, []);

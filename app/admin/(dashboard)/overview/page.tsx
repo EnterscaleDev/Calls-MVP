@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useStore } from "@/lib/store";
-import { useAdminSession } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/client";
 import { useAdminData } from "@/lib/hooks/useAdminData";
 import { getCampaignFunnel, getCampaignMetrics } from "@/lib/selectors";
 import { LoadingScreen, InlineBanner, ErrorState } from "@/components/ui/States";
@@ -19,19 +18,16 @@ import type { AssignmentStatus } from "@/lib/types";
 const ACTIVE_ASSIGNMENT_STATUSES: AssignmentStatus[] = ["assigned", "in_progress", "completed"];
 
 export default function AdminOverviewPage() {
-  // Credits top-up stays on the mock store this stage (org_credits writes go
-  // through the top_up_credits() RPC — that's Stage 5, alongside invitations).
-  const { ready: mockReady, db: mockDb, actions } = useStore();
-  const { session } = useAdminSession();
-  const actor = session?.name ?? "Toni";
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [topUpKind, setTopUpKind] = useState<"sms" | "voice">("sms");
   const [selectedPackageId, setSelectedPackageId] = useState(SMS_TOP_UP_PACKAGES[0].id);
   const [topUpSuccess, setTopUpSuccess] = useState("");
+  const [topUpError, setTopUpError] = useState("");
+  const [topingUp, setTopingUp] = useState(false);
 
-  const { data: db, loading, error } = useAdminData();
+  const { data: db, loading, error, refetch } = useAdminData();
 
-  if (!mockReady || loading || !db) return <LoadingScreen label="Loading overview..." />;
+  if (loading || !db) return <LoadingScreen label="Loading overview..." />;
   if (error) return <ErrorState title="Couldn't load the overview" description={error} />;
 
   const packages = topUpKind === "sms" ? SMS_TOP_UP_PACKAGES : VOICE_TOP_UP_PACKAGES;
@@ -42,12 +38,27 @@ export default function AdminOverviewPage() {
     setTopUpKind(kind);
     setSelectedPackageId((kind === "sms" ? SMS_TOP_UP_PACKAGES : VOICE_TOP_UP_PACKAGES)[0].id);
     setTopUpSuccess("");
+    setTopUpError("");
     setTopUpOpen(true);
   }
 
-  function handleConfirmTopUp() {
-    actions.topUpCredits(topUpKind, selectedPackage.amount, actor);
+  async function handleConfirmTopUp() {
+    setTopingUp(true);
+    setTopUpError("");
+    const supabase = createClient();
+    // org_credits is select-only for every client role — top_up_credits()
+    // is the only write path, and self-audits the top-up.
+    const { error: rpcError } = await supabase.rpc("top_up_credits", {
+      p_kind: topUpKind,
+      p_amount: selectedPackage.amount,
+    });
+    setTopingUp(false);
+    if (rpcError) {
+      setTopUpError(rpcError.message);
+      return;
+    }
     setTopUpSuccess(`Added ${selectedPackage.label.toLowerCase()}.`);
+    await refetch();
   }
 
   const campaigns = db.campaigns;
@@ -169,8 +180,8 @@ export default function AdminOverviewPage() {
       <div className="md:max-w-sm">
         <StatCard
           label="SMS & voice credits"
-          value={`${mockDb.orgCredits.sms.toLocaleString()} SMS`}
-          hint={`${mockDb.orgCredits.voiceMinutes.toLocaleString()} voice minutes remaining`}
+          value={`${db.orgCredits.sms.toLocaleString()} SMS`}
+          hint={`${db.orgCredits.voiceMinutes.toLocaleString()} voice minutes remaining`}
           tone="hero"
         >
           <div className="mt-3">
@@ -199,6 +210,7 @@ export default function AdminOverviewPage() {
       >
         <div className="flex flex-col gap-4">
           {topUpSuccess ? <InlineBanner kind="success">{topUpSuccess}</InlineBanner> : null}
+          {topUpError ? <InlineBanner kind="danger">{topUpError}</InlineBanner> : null}
           <div className="flex flex-col gap-2">
             {packages.map((pkg) => (
               <label
@@ -217,10 +229,12 @@ export default function AdminOverviewPage() {
             ))}
           </div>
           <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setTopUpOpen(false)}>
+            <Button variant="secondary" onClick={() => setTopUpOpen(false)} disabled={topingUp}>
               Close
             </Button>
-            <Button onClick={handleConfirmTopUp}>Add credits (mock)</Button>
+            <Button onClick={handleConfirmTopUp} disabled={topingUp}>
+              {topingUp ? "Adding..." : "Add credits (mock)"}
+            </Button>
           </div>
         </div>
       </Modal>
