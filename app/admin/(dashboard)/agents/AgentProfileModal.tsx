@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useStore } from "@/lib/store";
+import { createClient } from "@/lib/supabase/client";
+import type { AdminData } from "@/lib/hooks/useAdminData";
 import { getAgentProfileStats } from "@/lib/selectors";
 import { Modal } from "@/components/ui/Modal";
 import { Card, CardBody, StatCard } from "@/components/ui/Card";
@@ -14,14 +15,22 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
-export function AgentProfileModal({ agent, onClose }: { agent: AgentProfile | null; onClose: () => void }) {
-  const { db, actions } = useStore();
+export function AgentProfileModal({
+  agent,
+  db,
+  refetch,
+  onClose,
+}: {
+  agent: AgentProfile | null;
+  db: AdminData | null;
+  refetch: () => Promise<void>;
+  onClose: () => void;
+}) {
   const [selections, setSelections] = useState<Record<string, { checked: boolean; target: string }>>({});
-
-  const attachments = agent ? db.campaignAgents.filter((ca) => ca.agentId === agent.id) : [];
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!agent) return;
+    if (!agent || !db) return;
     const next: Record<string, { checked: boolean; target: string }> = {};
     for (const campaign of db.campaigns) {
       const existing = db.campaignAgents.find((ca) => ca.agentId === agent.id && ca.campaignId === campaign.id);
@@ -33,9 +42,9 @@ export function AgentProfileModal({ agent, onClose }: { agent: AgentProfile | nu
     setSelections(next);
     // Re-derive whenever a different agent is opened, or campaigns/attachments change underneath us.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agent?.id, db.campaigns, db.campaignAgents]);
+  }, [agent?.id, db?.campaigns, db?.campaignAgents]);
 
-  if (!agent) return null;
+  if (!agent || !db) return null;
 
   const stats = getAgentProfileStats(db, agent.id);
 
@@ -50,8 +59,10 @@ export function AgentProfileModal({ agent, onClose }: { agent: AgentProfile | nu
     setSelections((prev) => ({ ...prev, [campaignId]: { ...prev[campaignId], target: value } }));
   }
 
-  function handleSave() {
-    if (!agent) return;
+  async function handleSave() {
+    if (!agent || !db) return;
+    setSaving(true);
+    const supabase = createClient();
     for (const campaign of db.campaigns) {
       const selection = selections[campaign.id];
       if (!selection) continue;
@@ -59,19 +70,32 @@ export function AgentProfileModal({ agent, onClose }: { agent: AgentProfile | nu
       const targetNumber = Number(selection.target) || 0;
 
       if (selection.checked && !existing) {
-        actions.attachAgentToCampaign(campaign.id, agent.id, targetNumber);
+        await supabase.rpc("admin_attach_agent_to_campaign", {
+          p_campaign_id: campaign.id,
+          p_agent_id: agent.id,
+          p_daily_target: targetNumber,
+        });
       } else if (selection.checked && existing && existing.dailyTarget !== targetNumber) {
-        actions.updateCampaignAgentTarget(existing.id, targetNumber);
+        await supabase.from("campaign_agents").update({ daily_target: targetNumber }).eq("id", existing.id);
       } else if (!selection.checked && existing) {
-        actions.detachAgentFromCampaign(existing.id);
+        await supabase.rpc("admin_detach_agent_from_campaign", { p_campaign_agent_id: existing.id });
       }
     }
+    setSaving(false);
+    await refetch();
     onClose();
   }
 
-  function handleDeactivate() {
+  async function handleDeactivate() {
     if (!agent) return;
-    actions.setAgentStatus(agent.id, agent.status === "inactive" ? "active" : "inactive");
+    setSaving(true);
+    const supabase = createClient();
+    await supabase
+      .from("agent_profiles")
+      .update({ status: agent.status === "inactive" ? "active" : "inactive" })
+      .eq("id", agent.id);
+    setSaving(false);
+    await refetch();
     onClose();
   }
 
@@ -154,10 +178,12 @@ export function AgentProfileModal({ agent, onClose }: { agent: AgentProfile | nu
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="danger" onClick={handleDeactivate}>
+          <Button variant="danger" onClick={handleDeactivate} disabled={saving}>
             {agent.status === "inactive" ? "Reactivate" : "Deactivate"}
           </Button>
-          <Button onClick={handleSave}>Save permissions</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : "Save permissions"}
+          </Button>
         </div>
       </div>
     </Modal>

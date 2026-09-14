@@ -859,6 +859,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_assign_participant: {
+        Args: { p_agent_id: string; p_campaign_id: string; p_participant_id: string }
+        Returns: string
+      }
+      admin_attach_agent_to_campaign: {
+        Args: { p_agent_id: string; p_campaign_id: string; p_daily_target: number }
+        Returns: string
+      }
+      admin_detach_agent_from_campaign: {
+        Args: { p_campaign_agent_id: string }
+        Returns: undefined
+      }
+      admin_invite_agent: {
+        Args: {
+          p_campaign_id?: string
+          p_daily_target?: number
+          p_email: string
+          p_name: string
+        }
+        Returns: string
+      }
       log_sms_batch_sent: {
         Args: { p_campaign_id: string; p_recipient_count: number }
         Returns: undefined

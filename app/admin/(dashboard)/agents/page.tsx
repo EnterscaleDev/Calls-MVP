@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { createClient } from "@/lib/supabase/client";
+import { useAdminData } from "@/lib/hooks/useAdminData";
 import { listAgentsWithStats } from "@/lib/selectors";
-import { LoadingScreen, EmptyState, InlineBanner } from "@/components/ui/States";
+import { LoadingScreen, ErrorState, EmptyState, InlineBanner } from "@/components/ui/States";
 import { Card, CardBody, StatCard } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Form";
@@ -29,21 +30,20 @@ function StatusPill({ status }: { status: AgentStatus }) {
 }
 
 export default function AgentsPage() {
-  const { ready, db, actions } = useStore();
+  const { data: db, loading, error, refetch } = useAdminData();
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [campaignId, setCampaignId] = useState("");
   const [dailyTarget, setDailyTarget] = useState("8");
-  const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [profileAgent, setProfileAgent] = useState<AgentProfile | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | AgentStatus>("all");
 
-  if (!ready) return <LoadingScreen label="Loading people..." />;
-
-  const agentStats = listAgentsWithStats(db);
+  const agentStats = db ? listAgentsWithStats(db) : [];
   const activeCount = agentStats.filter((a) => a.agent.status === "active").length;
   const invitedCount = agentStats.filter((a) => a.agent.status === "invited").length;
   const inactiveCount = agentStats.filter((a) => a.agent.status === "inactive").length;
@@ -57,24 +57,35 @@ export default function AgentsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  function handleInviteSubmit(e: React.FormEvent) {
+  if (loading || !db) return <LoadingScreen label="Loading people..." />;
+  if (error) return <ErrorState title="Couldn't load people" description={error} />;
+
+  async function handleInviteSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !email.trim()) {
-      setError("Name and email are required.");
+      setFormError("Name and email are required.");
       return;
     }
-    setError("");
-    actions.inviteAgent({
-      name: name.trim(),
-      email: email.trim(),
-      campaignId: campaignId || undefined,
-      dailyTarget: Number(dailyTarget) || undefined,
+    setFormError("");
+    setSaving(true);
+    const supabase = createClient();
+    const { error: rpcError } = await supabase.rpc("admin_invite_agent", {
+      p_name: name.trim(),
+      p_email: email.trim(),
+      p_campaign_id: campaignId || undefined,
+      p_daily_target: Number(dailyTarget) || undefined,
     });
+    setSaving(false);
+    if (rpcError) {
+      setFormError(rpcError.message);
+      return;
+    }
     setInviteOpen(false);
     setName("");
     setEmail("");
     setCampaignId("");
     setDailyTarget("8");
+    await refetch();
   }
 
   return (
@@ -197,7 +208,7 @@ export default function AgentsPage() {
 
       <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title="Invite someone">
         <form onSubmit={handleInviteSubmit} className="flex flex-col gap-4">
-          {error ? <InlineBanner kind="danger">{error}</InlineBanner> : null}
+          {formError ? <InlineBanner kind="danger">{formError}</InlineBanner> : null}
           <Field label="Name" required>
             <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </Field>
@@ -221,12 +232,14 @@ export default function AgentsPage() {
             <Button type="button" variant="secondary" onClick={() => setInviteOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">Invite</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Inviting..." : "Invite"}
+            </Button>
           </div>
         </form>
       </Modal>
 
-      <AgentProfileModal agent={profileAgent} onClose={() => setProfileAgent(null)} />
+      <AgentProfileModal agent={profileAgent} db={db} refetch={refetch} onClose={() => setProfileAgent(null)} />
     </div>
   );
 }

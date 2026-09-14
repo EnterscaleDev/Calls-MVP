@@ -2,12 +2,12 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useStore } from "@/lib/store";
-import { useAdminSession } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/client";
+import { useAdminData } from "@/lib/hooks/useAdminData";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Form";
 import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/States";
+import { EmptyState, LoadingScreen, ErrorState } from "@/components/ui/States";
 import { AssignmentStatusBadge } from "@/components/ui/Badge";
 import { formatDateTime, formatTime, formatDate } from "../../../_lib/format";
 import { useCampaignDetail } from "../campaign-context";
@@ -44,9 +44,7 @@ interface SchedulingRow {
 
 function SchedulingPageInner() {
   const campaign = useCampaignDetail();
-  const { db, actions } = useStore();
-  const { session } = useAdminSession();
-  const actor = session?.name ?? "Toni";
+  const { data: db, loading, error, refetch } = useAdminData();
   const searchParams = useSearchParams();
   const initialFilter = (searchParams.get("filter") as Bucket | null) ?? "unassigned";
   const [view, setView] = useState<"board" | "table">("board");
@@ -54,17 +52,10 @@ function SchedulingPageInner() {
     BUCKET_COLUMNS.some((t) => t.key === initialFilter) ? initialFilter : "unassigned"
   );
   const [pendingAgent, setPendingAgent] = useState<Record<string, string>>({});
-
-  const campaignAgentIds = db.campaignAgents
-    .filter((ca) => ca.campaignId === campaign.id && ca.active)
-    .map((ca) => ca.agentId);
-  const activeAgents = db.agents.filter((a) => a.status === "active");
-  const assignableAgents =
-    campaignAgentIds.length > 0
-      ? activeAgents.filter((a) => campaignAgentIds.includes(a.id))
-      : activeAgents;
+  const [assigningId, setAssigningId] = useState<string | null>(null);
 
   const rows = useMemo<SchedulingRow[]>(() => {
+    if (!db) return [];
     const now = new Date();
     const startOfToday = new Date(now);
     startOfToday.setHours(0, 0, 0, 0);
@@ -111,6 +102,18 @@ function SchedulingPageInner() {
     return result.sort((a, b) => a.booking.scheduledStart.localeCompare(b.booking.scheduledStart));
   }, [db, campaign.id]);
 
+  const campaignAgentIds = db
+    ? db.campaignAgents.filter((ca) => ca.campaignId === campaign.id && ca.active).map((ca) => ca.agentId)
+    : [];
+  const activeAgents = db ? db.agents.filter((a) => a.status === "active") : [];
+  const assignableAgents =
+    campaignAgentIds.length > 0
+      ? activeAgents.filter((a) => campaignAgentIds.includes(a.id))
+      : activeAgents;
+
+  if (loading || !db) return <LoadingScreen label="Loading scheduling board..." />;
+  if (error) return <ErrorState title="Couldn't load scheduling" description={error} />;
+
   const counts = BUCKET_COLUMNS.reduce<Record<Bucket, number>>((acc, tab) => {
     acc[tab.key] = rows.filter((r) => r.bucket === tab.key).length;
     return acc;
@@ -118,19 +121,23 @@ function SchedulingPageInner() {
 
   const visibleRows = rows.filter((r) => r.bucket === activeBucket);
 
-  function handleAssign(row: SchedulingRow) {
+  async function handleAssign(row: SchedulingRow) {
     const agentId = pendingAgent[row.participantId];
     if (!agentId) return;
-    if (row.assignment) {
-      actions.reassignParticipant(row.assignment.id, agentId, actor);
-    } else {
-      actions.assignParticipant(campaign.id, row.participantId, agentId, actor);
-    }
+    setAssigningId(row.participantId);
+    const supabase = createClient();
+    await supabase.rpc("admin_assign_participant", {
+      p_campaign_id: campaign.id,
+      p_participant_id: row.participantId,
+      p_agent_id: agentId,
+    });
+    setAssigningId(null);
     setPendingAgent((prev) => {
       const next = { ...prev };
       delete next[row.participantId];
       return next;
     });
+    await refetch();
   }
 
   function AssignControl({ row, compact = false }: { row: SchedulingRow; compact?: boolean }) {
@@ -156,10 +163,10 @@ function SchedulingPageInner() {
         <Button
           size="sm"
           onClick={() => handleAssign(row)}
-          disabled={!pendingAgent[row.participantId]}
+          disabled={!pendingAgent[row.participantId] || assigningId === row.participantId}
           className={compact ? "w-full justify-center" : undefined}
         >
-          {row.assignment ? "Reassign" : "Assign"}
+          {assigningId === row.participantId ? "Saving..." : row.assignment ? "Reassign" : "Assign"}
         </Button>
       </div>
     );

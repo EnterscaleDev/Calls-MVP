@@ -292,7 +292,10 @@ export interface AgentProfileStats {
 }
 
 /** Richer per-agent stats for the agent profile modal — today, this week, and an all-time completion rate. */
-export function getAgentProfileStats(db: MockDatabase, agentId: string): AgentProfileStats {
+export function getAgentProfileStats(
+  db: Pick<MockDatabase, "callAttempts" | "assignments">,
+  agentId: string
+): AgentProfileStats {
   const now = new Date();
   const startOfToday = new Date(now);
   startOfToday.setHours(0, 0, 0, 0);
@@ -319,7 +322,9 @@ export function getAgentProfileStats(db: MockDatabase, agentId: string): AgentPr
   };
 }
 
-export function listAgentsWithStats(db: MockDatabase) {
+export function listAgentsWithStats(
+  db: Pick<MockDatabase, "agents" | "campaignAgents" | "campaigns" | "callAttempts">
+) {
   return db.agents.map((agent) => {
     const campaignIds = new Set(
       db.campaignAgents.filter((ca) => ca.agentId === agent.id).map((ca) => ca.campaignId)

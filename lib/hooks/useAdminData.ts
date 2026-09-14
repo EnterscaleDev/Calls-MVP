@@ -12,6 +12,7 @@ import type {
   CallAssignment,
   Contact,
   AgentProfile,
+  CampaignAgent,
   Recording,
   AuditEvent,
 } from "@/lib/types";
@@ -27,6 +28,7 @@ type CallAttemptRow = Database["public"]["Tables"]["call_attempts"]["Row"];
 type BookingRow = Database["public"]["Tables"]["interview_bookings"]["Row"];
 type AssignmentRow = Database["public"]["Tables"]["call_assignments"]["Row"];
 type AgentRow = Database["public"]["Tables"]["agent_profiles"]["Row"];
+type CampaignAgentRow = Database["public"]["Tables"]["campaign_agents"]["Row"];
 type RecordingRow = Database["public"]["Tables"]["recordings"]["Row"];
 type AuditEventRow = Database["public"]["Tables"]["audit_events"]["Row"];
 type OrgCreditsRow = Database["public"]["Tables"]["org_credits"]["Row"];
@@ -141,6 +143,10 @@ function mapAgent(row: AgentRow): AgentProfile {
   return { id: row.id, name: row.name, email: row.email, status: row.status, createdAt: row.created_at };
 }
 
+function mapCampaignAgent(row: CampaignAgentRow): CampaignAgent {
+  return { id: row.id, campaignId: row.campaign_id, agentId: row.agent_id, dailyTarget: row.daily_target, active: row.active };
+}
+
 function mapRecording(row: RecordingRow): Recording {
   return {
     id: row.id,
@@ -195,6 +201,7 @@ export interface AdminData {
   assignments: CallAssignment[];
   contacts: Contact[];
   agents: AgentProfile[];
+  campaignAgents: CampaignAgent[];
   recordings: Recording[];
   auditEvents: AuditEvent[];
   orgCredits: OrgCredits;
@@ -229,6 +236,7 @@ export function useAdminData() {
       bookings,
       assignments,
       agents,
+      campaignAgents,
       recordings,
       maskedContacts,
       auditEvents,
@@ -241,6 +249,7 @@ export function useAdminData() {
       supabase.from("interview_bookings").select("*"),
       supabase.from("call_assignments").select("*"),
       supabase.from("agent_profiles").select("*"),
+      supabase.from("campaign_agents").select("*"),
       supabase.from("recordings").select("*"),
       supabase.rpc("contacts_list_masked"),
       supabase.from("audit_events").select("*"),
@@ -255,6 +264,7 @@ export function useAdminData() {
       bookings.error ||
       assignments.error ||
       agents.error ||
+      campaignAgents.error ||
       recordings.error ||
       maskedContacts.error ||
       auditEvents.error ||
@@ -274,6 +284,7 @@ export function useAdminData() {
       bookings: (bookings.data ?? []).map(mapBooking),
       assignments: (assignments.data ?? []).map(mapAssignment),
       agents: (agents.data ?? []).map(mapAgent),
+      campaignAgents: (campaignAgents.data ?? []).map(mapCampaignAgent),
       recordings: (recordings.data ?? []).map(mapRecording),
       contacts: (maskedContacts.data ?? []).map(mapMaskedContact),
       auditEvents: (auditEvents.data ?? []).map(mapAuditEvent),

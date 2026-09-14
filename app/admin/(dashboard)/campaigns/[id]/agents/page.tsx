@@ -1,52 +1,87 @@
 "use client";
 
 import { useState } from "react";
-import { useStore } from "@/lib/store";
+import { createClient } from "@/lib/supabase/client";
+import { useAdminData } from "@/lib/hooks/useAdminData";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Select } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
-import { EmptyState, InlineBanner } from "@/components/ui/States";
+import { EmptyState, InlineBanner, LoadingScreen, ErrorState } from "@/components/ui/States";
 import { AgentStatusBadge } from "@/components/ui/Badge";
 import { useCampaignDetail } from "../campaign-context";
 
 export default function CampaignAgentsPage() {
   const campaign = useCampaignDetail();
-  const { db, actions } = useStore();
+  const { data: db, loading, error, refetch } = useAdminData();
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [dailyTarget, setDailyTarget] = useState(String(campaign.dailyAgentTarget || 8));
-  const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const [attachAgentId, setAttachAgentId] = useState("");
   const [attachTarget, setAttachTarget] = useState(String(campaign.dailyAgentTarget || 8));
 
-  const campaignAgentRows = db.campaignAgents
-    .filter((ca) => ca.campaignId === campaign.id)
-    .map((ca) => ({ ca, agent: db.agents.find((a) => a.id === ca.agentId) }))
-    .filter((row): row is { ca: typeof row.ca; agent: NonNullable<typeof row.agent> } => !!row.agent);
+  const campaignAgentRows = db
+    ? db.campaignAgents
+        .filter((ca) => ca.campaignId === campaign.id)
+        .map((ca) => ({ ca, agent: db.agents.find((a) => a.id === ca.agentId) }))
+        .filter((row): row is { ca: typeof row.ca; agent: NonNullable<typeof row.agent> } => !!row.agent)
+    : [];
 
   const attachedAgentIds = new Set(campaignAgentRows.map((r) => r.agent.id));
-  const otherAgents = db.agents.filter((a) => !attachedAgentIds.has(a.id));
+  const otherAgents = db ? db.agents.filter((a) => !attachedAgentIds.has(a.id)) : [];
 
-  function handleInviteSubmit(e: React.FormEvent) {
+  if (loading || !db) return <LoadingScreen label="Loading agents..." />;
+  if (error) return <ErrorState title="Couldn't load agents" description={error} />;
+
+  async function handleInviteSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !email.trim()) {
-      setError("Name and email are required.");
+      setFormError("Name and email are required.");
       return;
     }
-    setError("");
-    actions.inviteAgent({
-      name: name.trim(),
-      email: email.trim(),
-      campaignId: campaign.id,
-      dailyTarget: Number(dailyTarget) || undefined,
+    setFormError("");
+    setSaving(true);
+    const supabase = createClient();
+    const { error: rpcError } = await supabase.rpc("admin_invite_agent", {
+      p_name: name.trim(),
+      p_email: email.trim(),
+      p_campaign_id: campaign.id,
+      p_daily_target: Number(dailyTarget) || 8,
     });
+    setSaving(false);
+    if (rpcError) {
+      setFormError(rpcError.message);
+      return;
+    }
     setInviteOpen(false);
     setName("");
     setEmail("");
+    await refetch();
+  }
+
+  async function handleAttach() {
+    if (!attachAgentId) return;
+    const supabase = createClient();
+    await supabase.rpc("admin_attach_agent_to_campaign", {
+      p_campaign_id: campaign.id,
+      p_agent_id: attachAgentId,
+      p_daily_target: Number(attachTarget) || 0,
+    });
+    setAttachAgentId("");
+    await refetch();
+  }
+
+  async function handleTargetBlur(campaignAgentId: string, currentTarget: number, nextValue: string) {
+    const next = Number(nextValue);
+    if (!Number.isFinite(next) || next < 0 || next === currentTarget) return;
+    const supabase = createClient();
+    await supabase.from("campaign_agents").update({ daily_target: next }).eq("id", campaignAgentId);
+    await refetch();
   }
 
   return (
@@ -92,14 +127,7 @@ export default function CampaignAgentsPage() {
                 onChange={(e) => setAttachTarget(e.target.value)}
               />
             </Field>
-            <Button
-              variant="secondary"
-              disabled={!attachAgentId}
-              onClick={() => {
-                actions.attachAgentToCampaign(campaign.id, attachAgentId, Number(attachTarget) || 0);
-                setAttachAgentId("");
-              }}
-            >
+            <Button variant="secondary" disabled={!attachAgentId} onClick={handleAttach}>
               Attach
             </Button>
           </div>
@@ -141,12 +169,7 @@ export default function CampaignAgentsPage() {
                           min={0}
                           className="w-20 py-1 tabular-nums"
                           defaultValue={ca.dailyTarget}
-                          onBlur={(e) => {
-                            const next = Number(e.target.value);
-                            if (Number.isFinite(next) && next >= 0 && next !== ca.dailyTarget) {
-                              actions.updateCampaignAgentTarget(ca.id, next);
-                            }
-                          }}
+                          onBlur={(e) => handleTargetBlur(ca.id, ca.dailyTarget, e.target.value)}
                         />
                       </td>
                     </tr>
@@ -160,7 +183,7 @@ export default function CampaignAgentsPage() {
 
       <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title="Invite a new agent">
         <form onSubmit={handleInviteSubmit} className="flex flex-col gap-4">
-          {error ? <InlineBanner kind="danger">{error}</InlineBanner> : null}
+          {formError ? <InlineBanner kind="danger">{formError}</InlineBanner> : null}
           <Field label="Name" required>
             <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
           </Field>
@@ -174,7 +197,9 @@ export default function CampaignAgentsPage() {
             <Button type="button" variant="secondary" onClick={() => setInviteOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit">Invite</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Inviting..." : "Invite"}
+            </Button>
           </div>
         </form>
       </Modal>
