@@ -1,13 +1,14 @@
 "use client";
 
-import { useStore } from "@/lib/store";
-import { useAdminSession } from "@/lib/auth";
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useAdminData } from "@/lib/hooks/useAdminData";
 import { getAuditLog } from "@/lib/selectors";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Select } from "@/components/ui/Form";
 import { CampaignStatusBadge, Badge } from "@/components/ui/Badge";
-import { EmptyState } from "@/components/ui/States";
+import { EmptyState, LoadingScreen, ErrorState } from "@/components/ui/States";
 import { formatDateTime, labelize } from "../../../_lib/format";
 import { useCampaignDetail } from "../campaign-context";
 import type { CampaignStatus } from "@/lib/types";
@@ -42,17 +43,40 @@ function describeAction(action: string): string {
 
 export default function CampaignSettingsPage() {
   const campaign = useCampaignDetail();
-  const { db, actions } = useStore();
-  const { session } = useAdminSession();
-  const actor = session?.name ?? "Toni";
-  const auditEvents = getAuditLog(db, campaign.id);
+  const { data: db, loading, error, refetch } = useAdminData();
+  const [busy, setBusy] = useState(false);
 
-  function setStatus(status: CampaignStatus) {
-    actions.updateCampaignStatus(campaign.id, status, actor);
+  if (loading || !db) return <LoadingScreen label="Loading settings..." />;
+  if (error) return <ErrorState title="Couldn't load settings" description={error} />;
+
+  const auditEvents = getAuditLog(db, campaign.id);
+  // useCampaignDetail() comes from the layout's own separate useAdminData()
+  // call, so it won't reflect writes made through this page's refetch() —
+  // fall back to this page's own fresher copy for the fields this page
+  // itself can change.
+  const liveCampaign = db.campaigns.find((c) => c.id === campaign.id) ?? campaign;
+
+  async function setStatus(status: CampaignStatus) {
+    setBusy(true);
+    const supabase = createClient();
+    await supabase.rpc("admin_update_campaign_status", { p_campaign_id: campaign.id, p_status: status });
+    setBusy(false);
+    await refetch();
+  }
+
+  async function setRecording(recordingEnabled: boolean) {
+    setBusy(true);
+    const supabase = createClient();
+    await supabase.rpc("admin_update_campaign_recording", {
+      p_campaign_id: campaign.id,
+      p_recording_enabled: recordingEnabled,
+    });
+    setBusy(false);
+    await refetch();
   }
 
   const statusActions: { label: string; status: CampaignStatus; variant?: "secondary" | "danger" }[] = (() => {
-    switch (campaign.status) {
+    switch (liveCampaign.status) {
       case "draft":
       case "ready":
         return [{ label: "Activate", status: "active" }];
@@ -79,9 +103,9 @@ export default function CampaignSettingsPage() {
         <CardHeader title="Status" />
         <CardBody className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <CampaignStatusBadge status={campaign.status} />
+            <CampaignStatusBadge status={liveCampaign.status} />
             <p className="mt-1.5 text-xs text-foreground-muted">
-              Since {formatDateTime(campaign.updatedAt)}
+              Since {formatDateTime(liveCampaign.updatedAt)}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -89,6 +113,7 @@ export default function CampaignSettingsPage() {
               <Button
                 key={action.status}
                 variant={action.variant ?? "primary"}
+                disabled={busy}
                 onClick={() => setStatus(action.status)}
               >
                 {action.label}
@@ -107,8 +132,9 @@ export default function CampaignSettingsPage() {
           <Field label="Call recording">
             <Select
               className="w-48"
-              value={campaign.recordingEnabled ? "yes" : "no"}
-              onChange={(e) => actions.updateCampaignRecording(campaign.id, e.target.value === "yes", actor)}
+              disabled={busy}
+              value={liveCampaign.recordingEnabled ? "yes" : "no"}
+              onChange={(e) => setRecording(e.target.value === "yes")}
             >
               <option value="no">Off</option>
               <option value="yes">On</option>

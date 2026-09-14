@@ -1,25 +1,23 @@
-import type { MockDatabase } from "./mock-data";
+import type { AppData } from "./app-data";
 import type {
-  AgentParticipantView,
   AssignmentStatus,
   Campaign,
   CampaignFunnel,
   CampaignMetrics,
   CallAttempt,
-  CallOutcome,
   Contact,
   InterviewBooking,
 } from "./types";
 
 export function getCampaign(
-  db: Pick<MockDatabase, "campaigns">,
+  db: Pick<AppData, "campaigns">,
   campaignId: string
 ): Campaign | undefined {
   return db.campaigns.find((c) => c.id === campaignId);
 }
 
 export function getCampaignFunnel(
-  db: Pick<MockDatabase, "participants" | "invitations" | "callAttempts">,
+  db: Pick<AppData, "participants" | "invitations" | "callAttempts">,
   campaignId: string
 ): CampaignFunnel {
   const participants = db.participants.filter((p) => p.campaignId === campaignId);
@@ -50,7 +48,7 @@ export function getCampaignFunnel(
 }
 
 export function getCampaignMetrics(
-  db: Pick<MockDatabase, "campaigns" | "participants" | "invitations" | "callAttempts">,
+  db: Pick<AppData, "campaigns" | "participants" | "invitations" | "callAttempts">,
   campaignId: string
 ): CampaignMetrics {
   const funnel = getCampaignFunnel(db, campaignId);
@@ -81,7 +79,7 @@ export interface ParticipantRow {
 }
 
 export function getCampaignParticipantRows(
-  db: Pick<MockDatabase, "participants" | "contacts" | "invitations" | "bookings" | "assignments" | "agents">,
+  db: Pick<AppData, "participants" | "contacts" | "invitations" | "bookings" | "assignments" | "agents">,
   campaignId: string
 ): ParticipantRow[] {
   return db.participants
@@ -113,148 +111,6 @@ export function getCampaignParticipantRows(
         assignmentId: assignment?.id,
       };
     });
-}
-
-function aliasFor(contact: Contact, participantId: string): string {
-  const initial = contact.name.trim().split(/\s+/).slice(-1)[0]?.[0] ?? "";
-  const first = contact.name.trim().split(/\s+/)[0] ?? "Participant";
-  return `${first} ${initial ? initial + "." : ""}`.trim() || `Participant ${participantId.slice(-4)}`;
-}
-
-export interface AgentQueueBuckets {
-  overdue: AgentParticipantView[];
-  dueNow: AgentParticipantView[];
-  upcoming: AgentParticipantView[];
-  completedToday: AgentParticipantView[];
-}
-
-export function getAgentQueue(db: MockDatabase, agentId: string): AgentQueueBuckets {
-  const now = new Date();
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const endOfToday = new Date(now);
-  endOfToday.setHours(23, 59, 59, 999);
-
-  const assignments = db.assignments.filter((a) => a.agentId === agentId);
-
-  const buckets: AgentQueueBuckets = { overdue: [], dueNow: [], upcoming: [], completedToday: [] };
-
-  for (const a of assignments) {
-    const booking = db.bookings.find((b) => b.id === a.bookingId);
-    if (!booking) continue;
-    const campaign = getCampaign(db, a.campaignId);
-    if (!campaign) continue;
-    const contact = db.contacts.find(
-      (c) => c.id === db.participants.find((p) => p.id === a.participantId)?.contactId
-    );
-    const lastAttempt = [...db.callAttempts]
-      .filter((att) => att.assignmentId === a.id)
-      .sort((x, y) => x.startedAt.localeCompare(y.startedAt))
-      .at(-1);
-
-    const view: AgentParticipantView = {
-      assignmentId: a.id,
-      participantAlias: contact ? aliasFor(contact, a.participantId) : `Participant`,
-      campaignId: campaign.id,
-      campaignName: campaign.name,
-      bookingId: booking.id,
-      scheduledStart: booking.scheduledStart,
-      scheduledEnd: booking.scheduledEnd,
-      estimatedDurationMinutes: campaign.estimatedDurationMinutes,
-      status: a.status,
-      lastOutcome: lastAttempt?.disposition,
-    };
-
-    const scheduled = new Date(booking.scheduledStart);
-
-    if (a.status === "completed") {
-      if (scheduled >= startOfToday && scheduled <= endOfToday) buckets.completedToday.push(view);
-      continue;
-    }
-    if (a.status === "cancelled" || a.status === "reassigned") continue;
-
-    if (scheduled < now && scheduled >= startOfToday) {
-      buckets.dueNow.push(view);
-    } else if (scheduled < startOfToday) {
-      buckets.overdue.push(view);
-    } else if (scheduled <= endOfToday) {
-      buckets.dueNow.push(view);
-    } else {
-      buckets.upcoming.push(view);
-    }
-  }
-
-  const byTime = (a: AgentParticipantView, b: AgentParticipantView) =>
-    a.scheduledStart.localeCompare(b.scheduledStart);
-  buckets.overdue.sort(byTime);
-  buckets.dueNow.sort(byTime);
-  buckets.upcoming.sort(byTime);
-  buckets.completedToday.sort(byTime);
-
-  return buckets;
-}
-
-export interface AgentHistoryRow {
-  callAttemptId: string;
-  campaignName: string;
-  participantAlias: string;
-  startedAt: string;
-  durationSeconds?: number;
-  disposition?: CallOutcome;
-  notes?: string;
-  followUpRequired: boolean;
-}
-
-export function getAgentCallHistory(db: MockDatabase, agentId: string): AgentHistoryRow[] {
-  return db.callAttempts
-    .filter((a) => a.agentId === agentId && a.status === "ended")
-    .map((a) => {
-      const campaign = getCampaign(db, a.campaignId);
-      const participant = db.participants.find((p) => p.id === a.participantId);
-      const contact = participant ? db.contacts.find((c) => c.id === participant.contactId) : undefined;
-      return {
-        callAttemptId: a.id,
-        campaignName: campaign?.name ?? "Unknown campaign",
-        participantAlias: contact ? aliasFor(contact, a.participantId) : "Participant",
-        startedAt: a.startedAt,
-        durationSeconds: a.durationSeconds,
-        disposition: a.disposition,
-        notes: a.notes,
-        followUpRequired: a.disposition === "follow_up_required",
-      };
-    })
-    .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
-}
-
-export function resolveParticipantByToken(db: MockDatabase, token: string) {
-  const participant = db.participants.find((p) => p.inviteToken === token);
-  if (!participant) return { kind: "not_found" as const };
-  if (participant.tokenRevoked) return { kind: "revoked" as const };
-  if (new Date(participant.tokenExpiresAt) < new Date()) return { kind: "expired" as const };
-
-  const campaign = getCampaign(db, participant.campaignId);
-  if (!campaign) return { kind: "not_found" as const };
-  const contact = db.contacts.find((c) => c.id === participant.contactId);
-  const firstName = contact?.name?.trim().split(/\s+/)[0] ?? "there";
-  const booking = [...db.bookings]
-    .filter((b) => b.participantId === participant.id)
-    .sort((a, b) => a.scheduledStart.localeCompare(b.scheduledStart))
-    .at(-1);
-  const consents = db.consentEvents.filter((c) => c.participantId === participant.id);
-
-  return {
-    kind: "ok" as const,
-    campaign,
-    participant,
-    firstName,
-    booking,
-    hasAgreedParticipation: consents.some(
-      (c) => c.consentType === "participation" && c.consentStatus === "agreed"
-    ),
-    hasDeclined: consents.some(
-      (c) => c.consentType === "participation" && c.consentStatus === "declined"
-    ),
-  };
 }
 
 export function getAvailableSlots(
@@ -293,7 +149,7 @@ export interface AgentProfileStats {
 
 /** Richer per-agent stats for the agent profile modal — today, this week, and an all-time completion rate. */
 export function getAgentProfileStats(
-  db: Pick<MockDatabase, "callAttempts" | "assignments">,
+  db: Pick<AppData, "callAttempts" | "assignments">,
   agentId: string
 ): AgentProfileStats {
   const now = new Date();
@@ -323,7 +179,7 @@ export function getAgentProfileStats(
 }
 
 export function listAgentsWithStats(
-  db: Pick<MockDatabase, "agents" | "campaignAgents" | "campaigns" | "callAttempts">
+  db: Pick<AppData, "agents" | "campaignAgents" | "campaigns" | "callAttempts">
 ) {
   return db.agents.map((agent) => {
     const campaignIds = new Set(
@@ -351,7 +207,7 @@ export function listAgentsWithStats(
 }
 
 export function getCallAttemptsForCampaign(
-  db: Pick<MockDatabase, "callAttempts">,
+  db: Pick<AppData, "callAttempts">,
   campaignId: string
 ): CallAttempt[] {
   return db.callAttempts
@@ -359,18 +215,12 @@ export function getCallAttemptsForCampaign(
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
 
-export function getRecordingForAttempt(db: Pick<MockDatabase, "recordings">, callAttemptId: string) {
+export function getRecordingForAttempt(db: Pick<AppData, "recordings">, callAttemptId: string) {
   return db.recordings.find((r) => r.callAttemptId === callAttemptId);
 }
 
-export function getCallScript(db: MockDatabase, campaignId: string) {
-  return db.callScripts.find((s) => s.campaignId === campaignId);
-}
-
-export function getAuditLog(db: Pick<MockDatabase, "auditEvents">, campaignId?: string) {
+export function getAuditLog(db: Pick<AppData, "auditEvents">, campaignId?: string) {
   return [...db.auditEvents]
     .filter((e) => !campaignId || e.campaignId === campaignId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
-
-export { aliasFor };

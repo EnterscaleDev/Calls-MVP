@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useStore } from "@/lib/store";
+import { createClient } from "@/lib/supabase/client";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Field, Input, Textarea, Select } from "@/components/ui/Form";
 import { Button, ButtonLink } from "@/components/ui/Button";
@@ -56,10 +56,10 @@ type FieldErrors = Partial<Record<keyof FormState, string>>;
 
 export default function NewCampaignPage() {
   const router = useRouter();
-  const { ready, actions } = useStore();
   const [form, setForm] = useState<FormState>(INITIAL_STATE);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitError, setSubmitError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -83,7 +83,7 @@ export default function NewCampaignPage() {
     return next;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const validationErrors = validate();
     setErrors(validationErrors);
@@ -92,27 +92,30 @@ export default function NewCampaignPage() {
       return;
     }
     setSubmitError("");
-    if (!ready) {
-      setSubmitError("Store isn't ready yet — try again in a moment.");
+    setSubmitting(true);
+    const supabase = createClient();
+    const { data: campaignId, error } = await supabase.rpc("admin_create_campaign", {
+      p_name: form.name.trim(),
+      p_client_name: form.clientName.trim(),
+      p_description: form.description.trim(),
+      p_research_objective: form.researchObjective.trim(),
+      p_start_date: form.startDate,
+      p_end_date: form.endDate,
+      p_target_completions: Number(form.targetCompletions),
+      p_daily_agent_target: Number(form.dailyAgentTarget) || 0,
+      p_estimated_duration_minutes: Number(form.estimatedDurationMinutes) || 0,
+      p_incentive_title: form.incentiveTitle.trim(),
+      p_incentive_description: form.incentiveDescription.trim(),
+      p_sender_id: form.senderId.trim(),
+      p_recording_enabled: form.recordingEnabled,
+      p_status: form.status,
+    });
+    setSubmitting(false);
+    if (error || !campaignId) {
+      setSubmitError(error?.message ?? "Something went wrong creating the campaign.");
       return;
     }
-    const campaign = actions.createCampaign({
-      name: form.name.trim(),
-      clientName: form.clientName.trim(),
-      description: form.description.trim(),
-      researchObjective: form.researchObjective.trim(),
-      startDate: form.startDate,
-      endDate: form.endDate,
-      targetCompletions: Number(form.targetCompletions),
-      dailyAgentTarget: Number(form.dailyAgentTarget) || 0,
-      estimatedDurationMinutes: Number(form.estimatedDurationMinutes) || 0,
-      incentiveTitle: form.incentiveTitle.trim(),
-      incentiveDescription: form.incentiveDescription.trim(),
-      senderId: form.senderId.trim(),
-      recordingEnabled: form.recordingEnabled,
-      status: form.status,
-    });
-    router.push(`/admin/campaigns/${campaign.id}`);
+    router.push(`/admin/campaigns/${campaignId}`);
   }
 
   return (
@@ -242,7 +245,9 @@ export default function NewCampaignPage() {
           <ButtonLink href="/admin/campaigns" variant="secondary">
             Cancel
           </ButtonLink>
-          <Button type="submit">Create Campaign</Button>
+          <Button type="submit" disabled={submitting}>
+            {submitting ? "Creating..." : "Create Campaign"}
+          </Button>
         </div>
       </form>
     </div>

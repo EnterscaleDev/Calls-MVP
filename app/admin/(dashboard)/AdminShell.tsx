@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Megaphone,
@@ -15,9 +15,7 @@ import {
   MessageSquare,
   Mic,
 } from "lucide-react";
-import { useStore } from "@/lib/store";
 import { createClient } from "@/lib/supabase/client";
-import { LoadingScreen } from "@/components/ui/States";
 import { cn } from "@/lib/cn";
 
 const NAV = [
@@ -37,10 +35,19 @@ export function AdminShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { ready: storeReady, db } = useStore();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [credits, setCredits] = useState<{ sms: number; voiceMinutes: number } | null>(null);
 
-  if (!storeReady) return <LoadingScreen label="Loading..." />;
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from("org_credits")
+      .select("sms, voice_minutes")
+      .single()
+      .then(({ data }) => {
+        if (data) setCredits({ sms: data.sms, voiceMinutes: data.voice_minutes });
+      });
+  }, []);
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -86,14 +93,18 @@ export function AdminShell({
             Hexia Health · Northwind Insurance · Bexley Retail Group
           </div>
           <div className="flex items-center gap-2">
-            <span className="hidden items-center gap-1.5 rounded-[5px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-foreground sm:inline-flex">
-              <MessageSquare size={13} className="text-foreground-subtle" />
-              {db.orgCredits.sms.toLocaleString()}
-            </span>
-            <span className="hidden items-center gap-1.5 rounded-[5px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-foreground sm:inline-flex">
-              <Mic size={13} className="text-foreground-subtle" />
-              {db.orgCredits.voiceMinutes.toLocaleString()}
-            </span>
+            {credits ? (
+              <>
+                <span className="hidden items-center gap-1.5 rounded-[5px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-foreground sm:inline-flex">
+                  <MessageSquare size={13} className="text-foreground-subtle" />
+                  {credits.sms.toLocaleString()}
+                </span>
+                <span className="hidden items-center gap-1.5 rounded-[5px] border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-foreground sm:inline-flex">
+                  <Mic size={13} className="text-foreground-subtle" />
+                  {credits.voiceMinutes.toLocaleString()}
+                </span>
+              </>
+            ) : null}
             <button
               type="button"
               className="rounded-[5px] p-2 text-foreground-muted hover:bg-surface-muted"

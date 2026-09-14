@@ -859,6 +859,36 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_create_campaign: {
+        Args: {
+          p_client_name: string
+          p_daily_agent_target: number
+          p_description: string
+          p_end_date: string
+          p_estimated_duration_minutes: number
+          p_incentive_description: string
+          p_incentive_title: string
+          p_name: string
+          p_recording_enabled: boolean
+          p_research_objective: string
+          p_sender_id: string
+          p_start_date: string
+          p_status?: Database["public"]["Enums"]["campaign_status_enum"]
+          p_target_completions: number
+        }
+        Returns: string
+      }
+      admin_update_campaign_status: {
+        Args: {
+          p_campaign_id: string
+          p_status: Database["public"]["Enums"]["campaign_status_enum"]
+        }
+        Returns: undefined
+      }
+      admin_update_campaign_recording: {
+        Args: { p_campaign_id: string; p_recording_enabled: boolean }
+        Returns: undefined
+      }
       agent_submit_call_outcome: {
         Args: {
           p_call_attempt_id: string

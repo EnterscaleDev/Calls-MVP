@@ -16,7 +16,7 @@ import type {
   Recording,
   AuditEvent,
 } from "@/lib/types";
-import type { OrgCredits } from "@/lib/mock-data";
+import type { OrgCredits } from "@/lib/app-data";
 
 type CampaignRow = Database["public"]["Tables"]["campaigns"]["Row"];
 type ParticipantRow = Pick<
@@ -109,8 +109,6 @@ function mapCallAttempt(row: CallAttemptRow): CallAttempt {
   };
 }
 
-// The mock's embedded history[] is a separate booking_history_events table
-// now — not fetched here (Stage 3 pages only read status/scheduled_*).
 function mapBooking(row: BookingRow): InterviewBooking {
   return {
     id: row.id,
@@ -122,7 +120,6 @@ function mapBooking(row: BookingRow): InterviewBooking {
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    history: [],
   };
 }
 

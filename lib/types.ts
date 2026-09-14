@@ -1,6 +1,7 @@
-// Core domain types for the Calls MVP mock backend.
-// Field names intentionally mirror the eventual Supabase schema so the
-// backend phase can map onto these shapes with minimal translation.
+// Core domain view-model types for Calls MVP. Field names mirror the real
+// Supabase schema (see lib/supabase/database.types.ts) — these are the
+// camelCase shapes lib/hooks/*.ts map real rows into, and lib/selectors.ts's
+// pure functions are typed against.
 
 export type CampaignStatus =
   | "draft"
@@ -96,40 +97,12 @@ export interface CampaignInvitation {
   failureReason?: string;
 }
 
-export interface SmsTemplate {
-  campaignId: string;
-  senderId: string;
-  body: string;
-  incentiveText: string;
-  savedAsDraft: boolean;
-}
-
-export type ConsentType = "participation" | "recording";
-export type ConsentStatus = "agreed" | "declined";
-
-export interface ConsentEvent {
-  id: string;
-  campaignId: string;
-  participantId: string;
-  consentType: ConsentType;
-  consentVersion: string;
-  consentStatus: ConsentStatus;
-  consentedAt: string;
-  source: string;
-}
-
 export type BookingStatus =
   | "scheduled"
   | "rescheduled"
   | "cancelled"
   | "completed"
   | "missed";
-
-export interface BookingHistoryEntry {
-  at: string;
-  action: string;
-  note?: string;
-}
 
 export interface InterviewBooking {
   id: string;
@@ -141,7 +114,6 @@ export interface InterviewBooking {
   status: BookingStatus;
   createdAt: string;
   updatedAt: string;
-  history: BookingHistoryEntry[];
 }
 
 export type AgentStatus = "invited" | "active" | "inactive";
@@ -237,12 +209,6 @@ export interface CallScriptSection {
   title: string;
   instructions?: string;
   questions: string[];
-}
-
-export interface CallScript {
-  campaignId: string;
-  sections: CallScriptSection[];
-  updatedAt: string;
 }
 
 export type ActorType = "admin" | "agent" | "participant" | "system";
