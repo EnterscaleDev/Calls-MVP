@@ -234,7 +234,7 @@ export default function InvitationsPage() {
             {sendError ? <InlineBanner kind="danger">{sendError}</InlineBanner> : null}
 
             <Field label="Sender ID">
-              <Input value={senderId} onChange={(e) => setSenderId(e.target.value.toUpperCase())} />
+              <Input value={senderId} onChange={(e) => setSenderId(e.target.value)} />
             </Field>
             <Field
               label="Message body"
