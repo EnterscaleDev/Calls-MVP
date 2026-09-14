@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAdminData } from "@/lib/hooks/useAdminData";
 import { getAuditLog } from "@/lib/selectors";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Field, Select } from "@/components/ui/Form";
+import { Field, Select, Input } from "@/components/ui/Form";
 import { CampaignStatusBadge, Badge } from "@/components/ui/Badge";
-import { EmptyState, LoadingScreen, ErrorState } from "@/components/ui/States";
+import { EmptyState, LoadingScreen, ErrorState, InlineBanner } from "@/components/ui/States";
+import { Modal } from "@/components/ui/Modal";
 import { formatDateTime, labelize } from "../../../_lib/format";
 import { useCampaignDetail } from "../campaign-context";
 import type { CampaignStatus } from "@/lib/types";
@@ -19,6 +21,7 @@ const ACCESS_ACTIONS = new Set(["recording_accessed", "contact_numbers_revealed"
 function describeAction(action: string): string {
   const map: Record<string, string> = {
     campaign_created: "Campaign created",
+    campaign_deleted: "Campaign deleted",
     campaign_status_changed: "Status changed",
     campaign_recording_setting_changed: "Recording setting changed",
     contact_numbers_revealed: "Contact numbers revealed",
@@ -42,9 +45,14 @@ function describeAction(action: string): string {
 }
 
 export default function CampaignSettingsPage() {
+  const router = useRouter();
   const campaign = useCampaignDetail();
   const { data: db, loading, error, refetch } = useAdminData();
   const [busy, setBusy] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   if (loading || !db) return <LoadingScreen label="Loading settings..." />;
   if (error) return <ErrorState title="Couldn't load settings" description={error} />;
@@ -73,6 +81,39 @@ export default function CampaignSettingsPage() {
     });
     setBusy(false);
     await refetch();
+  }
+
+  async function handleDeleteCampaign() {
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { data: profileRow } = user
+        ? await supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle()
+        : { data: null };
+      // Logged before the delete since every other row referencing this
+      // campaign (including audit_events.campaign_id) cascades/nulls once
+      // the campaign itself is gone — the name in metadata is what survives.
+      await supabase.from("audit_events").insert({
+        organisation_id: campaign.organisationId,
+        campaign_id: campaign.id,
+        actor_type: "admin",
+        actor_name: profileRow?.display_name ?? "Admin",
+        action: "campaign_deleted",
+        entity_type: "campaign",
+        entity_id: campaign.id,
+        metadata: { name: campaign.name },
+      });
+      const { error: deleteErr } = await supabase.from("campaigns").delete().eq("id", campaign.id);
+      if (deleteErr) throw deleteErr;
+      router.push("/admin/campaigns");
+    } catch {
+      setDeleteError("Something went wrong deleting this campaign. Try again.");
+      setDeleting(false);
+    }
   }
 
   const statusActions: { label: string; status: CampaignStatus; variant?: "secondary" | "danger" }[] = (() => {
@@ -173,6 +214,55 @@ export default function CampaignSettingsPage() {
           )}
         </CardBody>
       </Card>
+
+      <Card>
+        <CardHeader
+          title="Danger zone"
+          description="Permanently deletes this campaign and everything under it — contacts' import records, invitations, bookings, call history, and recordings. This can't be undone."
+        />
+        <CardBody>
+          <Button variant="danger" onClick={() => setDeleteOpen(true)}>
+            Delete campaign
+          </Button>
+        </CardBody>
+      </Card>
+
+      <Modal
+        open={deleteOpen}
+        onClose={() => {
+          if (deleting) return;
+          setDeleteOpen(false);
+          setDeleteConfirmText("");
+        }}
+        title="Delete this campaign?"
+        description={`This permanently deletes "${liveCampaign.name}" and all of its participants, invitations, bookings, and call history. This can't be undone.`}
+      >
+        <div className="flex flex-col gap-3">
+          {deleteError ? <InlineBanner kind="danger">{deleteError}</InlineBanner> : null}
+          <Field label={`Type the campaign name to confirm: "${liveCampaign.name}"`}>
+            <Input value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} />
+          </Field>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="secondary"
+              disabled={deleting}
+              onClick={() => {
+                setDeleteOpen(false);
+                setDeleteConfirmText("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={deleting || deleteConfirmText !== liveCampaign.name}
+              onClick={handleDeleteCampaign}
+            >
+              {deleting ? "Deleting..." : "Delete campaign"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

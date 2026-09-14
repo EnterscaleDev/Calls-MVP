@@ -32,6 +32,7 @@ export default function InvitationsPage() {
   const [draftSaved, setDraftSaved] = useState(false);
   const [testSent, setTestSent] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [sendMode, setSendMode] = useState<"new" | "failed">("new");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
   const [sentBanner, setSentBanner] = useState("");
@@ -69,6 +70,7 @@ export default function InvitationsPage() {
 
   const participants = db.participants.filter((p) => p.campaignId === campaign.id);
   const eligibleCount = participants.filter((p) => p.participationStatus === "imported").length;
+  const failedParticipants = participants.filter((p) => p.participationStatus === "invite_failed");
 
   const failedCount = invitationRows.filter((r) => r.invitation.status === "failed").length;
   const queuedCount = invitationRows.filter((r) => r.invitation.status === "queued").length;
@@ -103,7 +105,7 @@ export default function InvitationsPage() {
     setSendError("");
     try {
       const supabase = createClient();
-      const eligible = participants.filter((p) => p.participationStatus === "imported");
+      const eligible = sendMode === "new" ? participants.filter((p) => p.participationStatus === "imported") : failedParticipants;
 
       // Sending needs the raw phone to hand to the (still-mocked) SMS
       // adapter — reveal is the one sanctioned, audited path to it. This
@@ -251,7 +253,24 @@ export default function InvitationsPage() {
               <Button variant="secondary" onClick={handleSendTest}>
                 Send Test
               </Button>
-              <Button onClick={() => setConfirmOpen(true)} disabled={eligibleCount === 0}>
+              {failedParticipants.length > 0 ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setSendMode("failed");
+                    setConfirmOpen(true);
+                  }}
+                >
+                  Resend Failed ({failedParticipants.length})
+                </Button>
+              ) : null}
+              <Button
+                onClick={() => {
+                  setSendMode("new");
+                  setConfirmOpen(true);
+                }}
+                disabled={eligibleCount === 0}
+              >
                 Send Campaign
               </Button>
             </div>
@@ -378,10 +397,12 @@ export default function InvitationsPage() {
       <Modal
         open={confirmOpen}
         onClose={() => (sending ? undefined : setConfirmOpen(false))}
-        title="Send campaign invitations"
-        description={`You are about to send this invitation to ${eligibleCount} participant${
-          eligibleCount === 1 ? "" : "s"
-        }.`}
+        title={sendMode === "new" ? "Send campaign invitations" : "Resend to failed contacts"}
+        description={(() => {
+          const count = sendMode === "new" ? eligibleCount : failedParticipants.length;
+          const verb = sendMode === "new" ? "send this invitation to" : "resend this invitation to";
+          return `You are about to ${verb} ${count} participant${count === 1 ? "" : "s"}.`;
+        })()}
       >
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setConfirmOpen(false)} disabled={sending}>
