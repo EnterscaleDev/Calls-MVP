@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { useStore } from "@/lib/store";
-import { getCallScript } from "@/lib/selectors";
+import { createClient } from "@/lib/supabase/client";
 import { makeId } from "@/lib/id";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Input, Textarea } from "@/components/ui/Form";
-import { InlineBanner, EmptyState } from "@/components/ui/States";
+import { InlineBanner, EmptyState, LoadingScreen, ErrorState } from "@/components/ui/States";
 import { cn } from "@/lib/cn";
 import { useCampaignDetail } from "../campaign-context";
 import type { CallScriptSection } from "@/lib/types";
@@ -19,15 +18,47 @@ function emptySection(): CallScriptSection {
 
 export default function CallScriptPage() {
   const campaign = useCampaignDetail();
-  const { db, actions } = useStore();
-  const existing = getCallScript(db, campaign.id);
-
-  const [sections, setSections] = useState<CallScriptSection[]>(existing?.sections ?? []);
-  const [activeId, setActiveId] = useState<string | null>(existing?.sections[0]?.id ?? null);
+  const [sections, setSections] = useState<CallScriptSection[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const supabase = createClient();
+    const { data, error: fetchError } = await supabase
+      .from("call_script_sections")
+      .select("id, title, instructions, questions, position")
+      .eq("campaign_id", campaign.id)
+      .order("position");
+    if (fetchError) {
+      setError(fetchError.message);
+      setLoading(false);
+      return;
+    }
+    const loaded: CallScriptSection[] = (data ?? []).map((r) => ({
+      id: r.id,
+      title: r.title,
+      instructions: r.instructions ?? undefined,
+      questions: r.questions ?? [],
+    }));
+    setSections(loaded);
+    setActiveId((prev) => (prev && loaded.some((s) => s.id === prev) ? prev : (loaded[0]?.id ?? null)));
+    setLoading(false);
+  }, [campaign.id]);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
 
   const activeIndex = sections.findIndex((s) => s.id === activeId);
   const active = activeIndex >= 0 ? sections[activeIndex] : null;
+
+  if (loading) return <LoadingScreen label="Loading call script..." />;
+  if (error) return <ErrorState title="Couldn't load the call script" description={error} />;
 
   function mutate(updater: (prev: CallScriptSection[]) => CallScriptSection[]) {
     setSaved(false);
@@ -76,14 +107,62 @@ export default function CallScriptPage() {
     );
   }
 
-  function handleSave() {
+  async function handleSave() {
     const cleaned = sections
       .map((s) => ({ ...s, questions: s.questions.map((q) => q.trim()).filter(Boolean) }))
       .filter((s) => s.title.trim().length > 0 || s.questions.length > 0);
-    actions.updateCallScript(campaign.id, cleaned);
-    setSections(cleaned);
-    if (!cleaned.some((s) => s.id === activeId)) setActiveId(cleaned[0]?.id ?? null);
+
+    setSaving(true);
+    setError(null);
+    const supabase = createClient();
+
+    // Wholesale replace, matching the mock's "save the whole script" model:
+    // call_script_sections has no stable identity worth preserving across a
+    // save, so every save just re-derives contiguous 0..n-1 positions from
+    // the current array order rather than diffing per-section.
+    const { error: deleteError } = await supabase
+      .from("call_script_sections")
+      .delete()
+      .eq("campaign_id", campaign.id);
+    if (deleteError) {
+      setSaving(false);
+      setError(deleteError.message);
+      return;
+    }
+
+    if (cleaned.length === 0) {
+      // call_script_sections.campaign_id FKs to call_scripts.campaign_id (its
+      // own primary key) — drop the parent row too so "no script" looks the
+      // same as it did before one was ever authored.
+      await supabase.from("call_scripts").delete().eq("campaign_id", campaign.id);
+    } else {
+      const { error: upsertError } = await supabase
+        .from("call_scripts")
+        .upsert({ campaign_id: campaign.id, updated_at: new Date().toISOString() });
+      if (upsertError) {
+        setSaving(false);
+        setError(upsertError.message);
+        return;
+      }
+      const { error: insertError } = await supabase.from("call_script_sections").insert(
+        cleaned.map((s, i) => ({
+          campaign_id: campaign.id,
+          title: s.title,
+          instructions: s.instructions?.trim() ? s.instructions.trim() : null,
+          questions: s.questions,
+          position: i,
+        }))
+      );
+      if (insertError) {
+        setSaving(false);
+        setError(insertError.message);
+        return;
+      }
+    }
+
+    setSaving(false);
     setSaved(true);
+    await refetch();
   }
 
   return (
@@ -92,7 +171,9 @@ export default function CallScriptPage() {
         <p className="text-sm text-foreground-muted">
           Sections and questions the agent walks through during the call.
         </p>
-        <Button onClick={handleSave}>Save script</Button>
+        <Button onClick={handleSave} disabled={saving}>
+          {saving ? "Saving..." : "Save script"}
+        </Button>
       </div>
 
       {saved ? <InlineBanner kind="success">Call script saved.</InlineBanner> : null}
