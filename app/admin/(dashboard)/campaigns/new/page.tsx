@@ -227,7 +227,7 @@ export default function NewCampaignPage() {
           <CardHeader title="Messaging & recording" />
           <CardBody className="grid gap-4 md:grid-cols-2">
             <Field label="Sender ID" required error={errors.senderId} hint="Shown as the SMS sender name.">
-              <Input value={form.senderId} onChange={(e) => set("senderId", e.target.value.toUpperCase())} placeholder="e.g. HEXIA" />
+              <Input value={form.senderId} onChange={(e) => set("senderId", e.target.value)} placeholder="e.g. HEXIA" />
             </Field>
             <Field label="Recording enabled">
               <Select
