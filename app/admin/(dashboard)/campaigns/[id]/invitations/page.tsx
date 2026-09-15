@@ -37,14 +37,16 @@ export default function InvitationsPage() {
   const [sendError, setSendError] = useState("");
   const [sentBanner, setSentBanner] = useState("");
 
-  const segments = estimateSegments(body);
+  const fullBody = incentiveText ? `${body}\n\n${incentiveText}` : body;
+  const segments = estimateSegments(fullBody);
   const previewText = useMemo(() => {
     return body
       .replaceAll("{{first_name}}", "Jamie")
       .replaceAll("{{campaign_link}}", "https://calls.example/i/abc123");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [body]);
-  const previewSegments = estimateSegments(previewText);
+  const fullPreviewText = incentiveText ? `${previewText}\n\n${incentiveText}` : previewText;
+  const previewSegments = estimateSegments(fullPreviewText);
 
   const invitationRows = useMemo(() => {
     if (!db) return [];
@@ -156,7 +158,7 @@ export default function InvitationsPage() {
         const contact = db.contacts.find((c) => c.id === participant.contactId);
         const firstName = (contact?.name ?? "").trim().split(/\s+/)[0] || "there";
         const campaignLink = `${window.location.origin}/participate/${token}`;
-        const personalizedBody = body
+        const personalizedBody = (incentiveText ? `${body}\n\n${incentiveText}` : body)
           .replaceAll("{{first_name}}", firstName)
           .replaceAll("{{campaign_link}}", campaignLink);
 
@@ -299,7 +301,7 @@ export default function InvitationsPage() {
           <CardHeader title="Preview" description="How this looks with a real participant's details filled in." />
           <CardBody className="flex flex-col gap-3">
             <p className={`text-xs font-medium ${previewSegments > 1 ? "text-warning" : "text-foreground-muted"}`}>
-              {previewText.length} character{previewText.length === 1 ? "" : "s"} · ~{previewSegments} SMS segment
+              {fullPreviewText.length} character{fullPreviewText.length === 1 ? "" : "s"} · ~{previewSegments} SMS segment
               {previewSegments === 1 ? "" : "s"}
               {previewSegments > 1 ? " — over the 160-character single-segment limit" : ""}
             </p>
