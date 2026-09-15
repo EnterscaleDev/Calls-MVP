@@ -392,6 +392,7 @@ export type Database = {
       campaign_invitations: {
         Row: {
           campaign_id: string
+          clicked_at: string | null
           created_at: string
           delivered_at: string | null
           failed_at: string | null
@@ -404,6 +405,7 @@ export type Database = {
         }
         Insert: {
           campaign_id: string
+          clicked_at?: string | null
           created_at?: string
           delivered_at?: string | null
           failed_at?: string | null
@@ -416,6 +418,7 @@ export type Database = {
         }
         Update: {
           campaign_id?: string
+          clicked_at?: string | null
           created_at?: string
           delivered_at?: string | null
           failed_at?: string | null
@@ -859,6 +862,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_assign_participant: {
+        Args: {
+          p_agent_id: string
+          p_campaign_id: string
+          p_participant_id: string
+        }
+        Returns: string
+      }
+      admin_attach_agent_to_campaign: {
+        Args: {
+          p_agent_id: string
+          p_campaign_id: string
+          p_daily_target: number
+        }
+        Returns: string
+      }
+      admin_check_duplicate_phones: {
+        Args: { p_campaign_id: string; p_phones: string[] }
+        Returns: string[]
+      }
       admin_create_campaign: {
         Args: {
           p_client_name: string
@@ -878,53 +901,9 @@ export type Database = {
         }
         Returns: string
       }
-      admin_update_campaign_status: {
-        Args: {
-          p_campaign_id: string
-          p_status: Database["public"]["Enums"]["campaign_status_enum"]
-        }
-        Returns: undefined
-      }
-      admin_update_campaign_recording: {
-        Args: { p_campaign_id: string; p_recording_enabled: boolean }
-        Returns: undefined
-      }
-      agent_submit_call_outcome: {
-        Args: {
-          p_call_attempt_id: string
-          p_disposition: Database["public"]["Enums"]["call_outcome_enum"]
-          p_notes: string
-        }
-        Returns: undefined
-      }
-      admin_assign_participant: {
-        Args: { p_agent_id: string; p_campaign_id: string; p_participant_id: string }
-        Returns: string
-      }
-      admin_attach_agent_to_campaign: {
-        Args: { p_agent_id: string; p_campaign_id: string; p_daily_target: number }
-        Returns: string
-      }
       admin_detach_agent_from_campaign: {
         Args: { p_campaign_agent_id: string }
         Returns: undefined
-      }
-      admin_invite_agent: {
-        Args: {
-          p_campaign_id?: string
-          p_daily_target?: number
-          p_email: string
-          p_name: string
-        }
-        Returns: string
-      }
-      log_sms_batch_sent: {
-        Args: { p_campaign_id: string; p_recipient_count: number }
-        Returns: undefined
-      }
-      admin_check_duplicate_phones: {
-        Args: { p_campaign_id: string; p_phones: string[] }
-        Returns: string[]
       }
       admin_import_contact: {
         Args: {
@@ -936,6 +915,26 @@ export type Database = {
           p_segment: string
         }
         Returns: string
+      }
+      admin_invite_agent: {
+        Args: {
+          p_campaign_id?: string
+          p_daily_target?: number
+          p_email: string
+          p_name: string
+        }
+        Returns: string
+      }
+      admin_update_campaign_recording: {
+        Args: { p_campaign_id: string; p_recording_enabled: boolean }
+        Returns: undefined
+      }
+      admin_update_campaign_status: {
+        Args: {
+          p_campaign_id: string
+          p_status: Database["public"]["Enums"]["campaign_status_enum"]
+        }
+        Returns: undefined
       }
       agent_call_queue: {
         Args: never
@@ -963,6 +962,14 @@ export type Database = {
           scheduled_end: string
           scheduled_start: string
         }[]
+      }
+      agent_submit_call_outcome: {
+        Args: {
+          p_call_attempt_id: string
+          p_disposition: Database["public"]["Enums"]["call_outcome_enum"]
+          p_notes: string
+        }
+        Returns: undefined
       }
       cancel_participant_booking: {
         Args: { p_booking_id: string; p_token: string }
@@ -998,8 +1005,8 @@ export type Database = {
         }
         Returns: string
       }
-      fn_current_agent_id: { Args: Record<PropertyKey, never>; Returns: string }
-      fn_is_admin: { Args: Record<PropertyKey, never>; Returns: boolean }
+      fn_current_agent_id: { Args: never; Returns: string }
+      fn_is_admin: { Args: never; Returns: boolean }
       fn_participant_alias: {
         Args: { p_name: string; p_participant_id: string }
         Returns: string
@@ -1007,6 +1014,10 @@ export type Database = {
       fn_participant_id_from_token: {
         Args: { p_token: string }
         Returns: string
+      }
+      log_sms_batch_sent: {
+        Args: { p_campaign_id: string; p_recipient_count: number }
+        Returns: undefined
       }
       record_participant_consent: {
         Args: {

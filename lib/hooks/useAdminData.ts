@@ -87,6 +87,7 @@ function mapInvitation(row: InvitationRow): CampaignInvitation {
     deliveredAt: row.delivered_at ?? undefined,
     failedAt: row.failed_at ?? undefined,
     failureReason: row.failure_reason ?? undefined,
+    clickedAt: row.clicked_at ?? undefined,
   };
 }
 

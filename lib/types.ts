@@ -95,6 +95,7 @@ export interface CampaignInvitation {
   deliveredAt?: string;
   failedAt?: string;
   failureReason?: string;
+  clickedAt?: string;
 }
 
 export type BookingStatus =

@@ -79,6 +79,8 @@ export default function InvitationsPage() {
   const sentTotal = invitationRows.length;
   const deliveredCount = invitationRows.filter((r) => r.invitation.status === "delivered").length;
   const deliveryRate = sentTotal > 0 ? deliveredCount / sentTotal : 0;
+  const clickedCount = invitationRows.filter((r) => r.invitation.clickedAt).length;
+  const clickRate = sentTotal > 0 ? clickedCount / sentTotal : 0;
   const optedInCount = participants.filter((p) =>
     ["opted_in", "scheduled", "completed"].includes(p.participationStatus)
   ).length;
@@ -231,10 +233,11 @@ export default function InvitationsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
         <StatCard label="Queued" value={queuedCount} />
         <StatCard label="Sent" value={sentTotal} />
         <StatCard label="Delivered" value={deliveredCount} hint={`${formatPercent(deliveryRate)} delivery rate`} />
+        <StatCard label="Clicked" value={clickedCount} hint={`${formatPercent(clickRate)} click rate`} />
         <StatCard label="Failed" value={failedCount} hint="Unreachable or barred" tone={failedCount > 0 ? "danger" : "default"} />
         <StatCard label="Opted in" value={optedInCount} hint={`${formatPercent(optedInRateOfDelivered)} of delivered`} />
       </div>
@@ -382,6 +385,7 @@ export default function InvitationsPage() {
                   <tr className="border-b border-border text-xs uppercase tracking-wide text-foreground-subtle">
                     <th className="px-5 py-3 font-medium">Participant</th>
                     <th className="px-5 py-3 font-medium">Status</th>
+                    <th className="px-5 py-3 font-medium">Clicked</th>
                     <th className="px-5 py-3 font-medium">Detail</th>
                   </tr>
                 </thead>
@@ -396,6 +400,9 @@ export default function InvitationsPage() {
                       <td className="px-5 py-3 font-medium text-foreground">{contactName}</td>
                       <td className="px-5 py-3">
                         <InvitationStatusBadge status={invitation.status} />
+                      </td>
+                      <td className="px-5 py-3 text-foreground-muted">
+                        {invitation.clickedAt ? formatDateTime(invitation.clickedAt) : "—"}
                       </td>
                       <td className="px-5 py-3 text-foreground-muted">
                         {invitation.status === "failed" ? invitation.failureReason ?? "Delivery failed" : "—"}

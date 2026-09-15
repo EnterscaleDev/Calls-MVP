@@ -33,6 +33,11 @@ export interface SendDotgoSmsInput {
   requestId: string;
   senderMask?: string;
   callbackUrl?: string;
+  /** Delivery-status callback and click-tracking are separate Dotgo
+   *  features/params — track_url is what turns on auto-wrapping any link
+   *  in `body` with a Dotgo-hosted short link and firing a click event to
+   *  this URL. See app/api/sms/dotgo-click-callback/route.ts. */
+  trackUrl?: string;
 }
 
 export type SendDotgoSmsResult =
@@ -60,6 +65,7 @@ export async function sendDotgoSms(input: SendDotgoSmsInput): Promise<SendDotgoS
   };
   if (input.senderMask) payload.sender_mask = input.senderMask;
   if (input.callbackUrl) payload.callback_url = input.callbackUrl;
+  if (input.trackUrl) payload.track_url = input.trackUrl;
 
   let response: Response;
   try {

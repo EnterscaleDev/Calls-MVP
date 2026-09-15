@@ -39,6 +39,7 @@ export async function POST(request: Request) {
 
   const appUrl = process.env.APP_PUBLIC_URL;
   const callbackUrl = appUrl ? `${appUrl}/api/sms/dotgo-callback` : undefined;
+  const trackUrl = appUrl ? `${appUrl}/api/sms/dotgo-click-callback` : undefined;
 
   const result = await sendDotgoSms({
     to: body.to,
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
     requestId: body.requestId,
     senderMask: body.senderMask,
     callbackUrl,
+    trackUrl,
   });
 
   return NextResponse.json(result, { status: result.ok ? 200 : 502 });
