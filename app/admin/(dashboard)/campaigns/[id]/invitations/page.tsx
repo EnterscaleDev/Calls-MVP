@@ -101,6 +101,7 @@ export default function InvitationsPage() {
   }
 
   async function handleConfirmSend() {
+    if (!db) return;
     setSending(true);
     setSendError("");
     try {
@@ -152,10 +153,22 @@ export default function InvitationsPage() {
           .single();
         if (insertError || !invitationRow) continue;
 
+        const contact = db.contacts.find((c) => c.id === participant.contactId);
+        const firstName = (contact?.name ?? "").trim().split(/\s+/)[0] || "there";
+        const campaignLink = `${window.location.origin}/participate/${token}`;
+        const personalizedBody = body
+          .replaceAll("{{first_name}}", firstName)
+          .replaceAll("{{campaign_link}}", campaignLink);
+
         const sendResponse = await fetch("/api/sms/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to: phone, body, requestId: invitationRow.id, senderMask: senderId }),
+          body: JSON.stringify({
+            to: phone,
+            body: personalizedBody,
+            requestId: invitationRow.id,
+            senderMask: senderId,
+          }),
         });
         const sendResult = (await sendResponse.json().catch(() => ({
           ok: false,
