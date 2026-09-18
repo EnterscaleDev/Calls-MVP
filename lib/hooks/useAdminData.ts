@@ -12,6 +12,7 @@ import type {
   CallAssignment,
   Contact,
   AgentProfile,
+  AgentInvitation,
   CampaignAgent,
   Recording,
   AuditEvent,
@@ -28,6 +29,7 @@ type CallAttemptRow = Database["public"]["Tables"]["call_attempts"]["Row"];
 type BookingRow = Database["public"]["Tables"]["interview_bookings"]["Row"];
 type AssignmentRow = Database["public"]["Tables"]["call_assignments"]["Row"];
 type AgentRow = Database["public"]["Tables"]["agent_profiles"]["Row"];
+type AgentInvitationRow = Database["public"]["Tables"]["user_invitations"]["Row"];
 type CampaignAgentRow = Database["public"]["Tables"]["campaign_agents"]["Row"];
 type RecordingRow = Database["public"]["Tables"]["recordings"]["Row"];
 type AuditEventRow = Database["public"]["Tables"]["audit_events"]["Row"];
@@ -147,6 +149,23 @@ function mapCampaignAgent(row: CampaignAgentRow): CampaignAgent {
   return { id: row.id, campaignId: row.campaign_id, agentId: row.agent_id, dailyTarget: row.daily_target, active: row.active };
 }
 
+// A stored status of 'pending' past its own expires_at is displayed as
+// 'expired' rather than left looking falsely still-pending — there's no
+// background job flipping the stored value, so this is computed on read.
+function mapAgentInvitation(row: AgentInvitationRow): AgentInvitation {
+  const effectiveStatus =
+    row.status === "pending" && new Date(row.expires_at).getTime() < Date.now() ? "expired" : row.status;
+  return {
+    id: row.id,
+    agentProfileId: row.agent_profile_id,
+    email: row.email,
+    status: effectiveStatus,
+    expiresAt: row.expires_at,
+    invitedByName: row.invited_by_name,
+    createdAt: row.created_at,
+  };
+}
+
 function mapRecording(row: RecordingRow): Recording {
   return {
     id: row.id,
@@ -201,6 +220,7 @@ export interface AdminData {
   assignments: CallAssignment[];
   contacts: Contact[];
   agents: AgentProfile[];
+  agentInvitations: AgentInvitation[];
   campaignAgents: CampaignAgent[];
   recordings: Recording[];
   auditEvents: AuditEvent[];
@@ -236,6 +256,7 @@ export function useAdminData() {
       bookings,
       assignments,
       agents,
+      agentInvitations,
       campaignAgents,
       recordings,
       maskedContacts,
@@ -249,6 +270,7 @@ export function useAdminData() {
       supabase.from("interview_bookings").select("*"),
       supabase.from("call_assignments").select("*"),
       supabase.from("agent_profiles").select("*"),
+      supabase.from("user_invitations").select("*"),
       supabase.from("campaign_agents").select("*"),
       supabase.from("recordings").select("*"),
       supabase.rpc("contacts_list_masked"),
@@ -264,6 +286,7 @@ export function useAdminData() {
       bookings.error ||
       assignments.error ||
       agents.error ||
+      agentInvitations.error ||
       campaignAgents.error ||
       recordings.error ||
       maskedContacts.error ||
@@ -284,6 +307,7 @@ export function useAdminData() {
       bookings: (bookings.data ?? []).map(mapBooking),
       assignments: (assignments.data ?? []).map(mapAssignment),
       agents: (agents.data ?? []).map(mapAgent),
+      agentInvitations: (agentInvitations.data ?? []).map(mapAgentInvitation),
       campaignAgents: (campaignAgents.data ?? []).map(mapCampaignAgent),
       recordings: (recordings.data ?? []).map(mapRecording),
       contacts: (maskedContacts.data ?? []).map(mapMaskedContact),

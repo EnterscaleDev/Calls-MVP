@@ -130,6 +130,18 @@ export interface AgentProfile {
   createdAt: string;
 }
 
+export type AgentInvitationStatus = "pending" | "accepted" | "expired" | "revoked";
+
+export interface AgentInvitation {
+  id: string;
+  agentProfileId: string;
+  email: string;
+  status: AgentInvitationStatus;
+  expiresAt: string;
+  invitedByName: string;
+  createdAt: string;
+}
+
 export interface CampaignAgent {
   id: string;
   campaignId: string;

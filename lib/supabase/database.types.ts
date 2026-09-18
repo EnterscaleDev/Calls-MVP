@@ -967,6 +967,72 @@ export type Database = {
           },
         ]
       }
+      user_invitations: {
+        Row: {
+          accepted_at: string | null
+          agent_profile_id: string
+          auth_user_id: string | null
+          created_at: string
+          email: string
+          expires_at: string
+          id: string
+          intended_role: Database["public"]["Enums"]["user_role_enum"]
+          invited_by: string | null
+          invited_by_name: string
+          organisation_id: string
+          revoked_at: string | null
+          status: Database["public"]["Enums"]["agent_invitation_status_enum"]
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          agent_profile_id: string
+          auth_user_id?: string | null
+          created_at?: string
+          email: string
+          expires_at: string
+          id?: string
+          intended_role?: Database["public"]["Enums"]["user_role_enum"]
+          invited_by?: string | null
+          invited_by_name: string
+          organisation_id: string
+          revoked_at?: string | null
+          status?: Database["public"]["Enums"]["agent_invitation_status_enum"]
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          agent_profile_id?: string
+          auth_user_id?: string | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          id?: string
+          intended_role?: Database["public"]["Enums"]["user_role_enum"]
+          invited_by?: string | null
+          invited_by_name?: string
+          organisation_id?: string
+          revoked_at?: string | null
+          status?: Database["public"]["Enums"]["agent_invitation_status_enum"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_invitations_agent_profile_id_fkey"
+            columns: ["agent_profile_id"]
+            isOneToOne: false
+            referencedRelation: "agent_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_invitations_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -994,7 +1060,10 @@ export type Database = {
       }
       admin_campaign_delete_eligibility: {
         Args: { p_campaign_id: string }
-        Returns: { eligible: boolean; reason: string }[]
+        Returns: {
+          eligible: boolean
+          reason: string
+        }[]
       }
       admin_check_duplicate_phones: {
         Args: { p_campaign_id: string; p_phones: string[] }
@@ -1044,17 +1113,41 @@ export type Database = {
       }
       admin_invite_agent: {
         Args: {
-          p_campaign_id?: string
+          p_campaign_ids?: string[]
           p_daily_target?: number
           p_email: string
           p_name: string
           p_phone?: string
         }
-        Returns: string
+        Returns: {
+          agent_profile_id: string
+          expires_at: string
+          invitation_id: string
+        }[]
+      }
+      admin_link_invitation_auth_user: {
+        Args: { p_auth_user_id: string; p_invitation_id: string }
+        Returns: undefined
+      }
+      admin_resend_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: {
+          agent_profile_id: string
+          auth_user_id: string
+          email: string
+          expires_at: string
+        }[]
       }
       admin_restore_campaign: {
         Args: { p_campaign_id: string }
         Returns: undefined
+      }
+      admin_revoke_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: {
+          agent_profile_id: string
+          auth_user_id: string
+        }[]
       }
       admin_update_campaign_details: {
         Args: {
@@ -1085,6 +1178,9 @@ export type Database = {
         }
         Returns: undefined
       }
+      agent_accept_invitation:
+        | { Args: never; Returns: undefined }
+        | { Args: { p_display_name?: string }; Returns: undefined }
       agent_call_queue: {
         Args: never
         Returns: {
@@ -1097,6 +1193,17 @@ export type Database = {
           participant_alias: string
           scheduled_end: string
           scheduled_start: string
+        }[]
+      }
+      agent_lookup_own_invitation: {
+        Args: never
+        Returns: {
+          agent_name: string
+          campaign_names: string[]
+          expires_at: string
+          invitation_id: string
+          organisation_name: string
+          status: Database["public"]["Enums"]["agent_invitation_status_enum"]
         }[]
       }
       agent_participant_detail: {
@@ -1227,6 +1334,11 @@ export type Database = {
     }
     Enums: {
       actor_type_enum: "admin" | "agent" | "participant" | "system"
+      agent_invitation_status_enum:
+        | "pending"
+        | "accepted"
+        | "expired"
+        | "revoked"
       agent_status_enum: "invited" | "active" | "inactive"
       assignment_status_enum:
         | "assigned"
@@ -1411,6 +1523,12 @@ export const Constants = {
   public: {
     Enums: {
       actor_type_enum: ["admin", "agent", "participant", "system"],
+      agent_invitation_status_enum: [
+        "pending",
+        "accepted",
+        "expired",
+        "revoked",
+      ],
       agent_status_enum: ["invited", "active", "inactive"],
       assignment_status_enum: [
         "assigned",

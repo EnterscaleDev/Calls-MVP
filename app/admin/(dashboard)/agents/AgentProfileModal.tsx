@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { AdminData } from "@/lib/hooks/useAdminData";
 import { getAgentProfileStats } from "@/lib/selectors";
@@ -26,12 +26,33 @@ export function AgentProfileModal({
   refetch: () => Promise<void>;
   onClose: () => void;
 }) {
-  const [selections, setSelections] = useState<Record<string, { checked: boolean; target: string }>>({});
-  const [phone, setPhone] = useState("");
-  const [saving, setSaving] = useState(false);
+  if (!agent || !db) return null;
+  // Keyed by agent id: opening a different agent (or the same one again
+  // after a refetch) mounts a fresh instance with state re-derived from the
+  // current props, instead of an effect resetting state on every change.
+  return (
+    <AgentProfileModalInner
+      key={agent.id}
+      agent={agent}
+      db={db}
+      refetch={refetch}
+      onClose={onClose}
+    />
+  );
+}
 
-  useEffect(() => {
-    if (!agent || !db) return;
+function AgentProfileModalInner({
+  agent,
+  db,
+  refetch,
+  onClose,
+}: {
+  agent: AgentProfile;
+  db: AdminData;
+  refetch: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const [selections, setSelections] = useState<Record<string, { checked: boolean; target: string }>>(() => {
     const next: Record<string, { checked: boolean; target: string }> = {};
     for (const campaign of db.campaigns) {
       const existing = db.campaignAgents.find((ca) => ca.agentId === agent.id && ca.campaignId === campaign.id);
@@ -40,13 +61,11 @@ export function AgentProfileModal({
         target: String(existing?.dailyTarget ?? campaign.dailyAgentTarget ?? 8),
       };
     }
-    setSelections(next);
-    setPhone(agent.phone);
-    // Re-derive whenever a different agent is opened, or campaigns/attachments change underneath us.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agent?.id, db?.campaigns, db?.campaignAgents]);
-
-  if (!agent || !db) return null;
+    return next;
+  });
+  const [phone, setPhone] = useState(agent.phone);
+  const [saving, setSaving] = useState(false);
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
 
   const stats = getAgentProfileStats(db, agent.id);
 
@@ -62,7 +81,6 @@ export function AgentProfileModal({
   }
 
   async function handleSave() {
-    if (!agent || !db) return;
     setSaving(true);
     const supabase = createClient();
     if (phone !== agent.phone) {
@@ -92,7 +110,12 @@ export function AgentProfileModal({
   }
 
   async function handleDeactivate() {
-    if (!agent) return;
+    // Reactivating (inactive -> active) needs no confirmation per the
+    // product spec; only the destructive active -> inactive direction does.
+    if (agent.status !== "inactive" && !confirmDeactivate) {
+      setConfirmDeactivate(true);
+      return;
+    }
     setSaving(true);
     const supabase = createClient();
     await supabase
@@ -100,6 +123,7 @@ export function AgentProfileModal({
       .update({ status: agent.status === "inactive" ? "active" : "inactive" })
       .eq("id", agent.id);
     setSaving(false);
+    setConfirmDeactivate(false);
     await refetch();
     onClose();
   }
@@ -191,6 +215,24 @@ export function AgentProfileModal({
             </div>
           </CardBody>
         </Card>
+
+        {confirmDeactivate ? (
+          <div className="rounded-[6px] border border-danger/25 bg-danger-soft p-3">
+            <p className="text-sm font-semibold text-danger">Deactivate {agent.name}?</p>
+            <p className="mt-1 text-sm text-danger/80">
+              {agent.name} will no longer be able to access assigned calls. Their previous call history and
+              notes will remain available.
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setConfirmDeactivate(false)} disabled={saving}>
+                Cancel
+              </Button>
+              <Button variant="danger" size="sm" onClick={handleDeactivate} disabled={saving}>
+                {saving ? "Deactivating..." : "Deactivate Agent"}
+              </Button>
+            </div>
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap justify-end gap-3">
           <Button variant="secondary" onClick={onClose}>
