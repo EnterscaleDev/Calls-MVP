@@ -112,6 +112,14 @@ export default function InvitationsPage() {
       const supabase = createClient();
       const eligible = sendMode === "new" ? participants.filter((p) => p.participationStatus === "imported") : failedParticipants;
 
+      const projectedCost = eligible.length * segments * SMS_CREDIT_COST_PER_SEGMENT;
+      if (projectedCost > db.orgCredits.sms) {
+        setSendError(
+          `Not enough SMS credit for this send — needs ${projectedCost}, ${db.orgCredits.sms} available.`
+        );
+        return;
+      }
+
       // Sending needs the raw phone to hand to the (still-mocked) SMS
       // adapter — reveal is the one sanctioned, audited path to it. This
       // fires one contact_numbers_revealed audit row for the batch, same as
@@ -221,6 +229,14 @@ export default function InvitationsPage() {
         p_campaign_id: campaign.id,
         p_recipient_count: eligible.length,
       });
+
+      if (sentCount > 0) {
+        await supabase.rpc("record_sms_send_cost", {
+          p_campaign_id: campaign.id,
+          p_amount: sentCount * segments * SMS_CREDIT_COST_PER_SEGMENT,
+          p_recipient_count: sentCount,
+        });
+      }
 
       setSentBanner(
         `Sent to ${sentCount} of ${eligible.length} eligible participant${eligible.length === 1 ? "" : "s"}.`
@@ -347,8 +363,8 @@ export default function InvitationsPage() {
           </div>
           <p className="mt-4 text-xs text-foreground-subtle">
             SMS credit after this send: <span className="font-medium text-foreground">{creditAfterSend.toLocaleString()}</span>.
-            Charged to SMS credit only — voice credit pays for the calls themselves and tops up separately. Sends pause
-            automatically if credit runs out mid-batch.
+            Charged to SMS credit only — voice credit pays for the calls themselves and tops up separately. The
+            send is blocked upfront if there isn&apos;t enough credit for the whole batch.
           </p>
         </CardBody>
       </Card>

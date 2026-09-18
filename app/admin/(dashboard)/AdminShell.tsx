@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Mic,
   Hash,
+  CreditCard,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/cn";
@@ -25,6 +26,7 @@ const NAV = [
   { href: "/admin/agents", label: "People", icon: Users },
   { href: "/admin/call-activity", label: "Call Activity", icon: PhoneCall },
   { href: "/admin/sender-ids", label: "Sender IDs", icon: Hash },
+  { href: "/admin/credits", label: "Credits", icon: CreditCard },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

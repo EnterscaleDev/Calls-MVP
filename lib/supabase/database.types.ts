@@ -663,6 +663,54 @@ export type Database = {
           },
         ]
       }
+      credit_transactions: {
+        Row: {
+          account: string
+          amount: number
+          campaign_id: string | null
+          created_at: string
+          detail: string
+          id: string
+          kind: string
+          organisation_id: string
+        }
+        Insert: {
+          account: string
+          amount: number
+          campaign_id?: string | null
+          created_at?: string
+          detail: string
+          id?: string
+          kind: string
+          organisation_id: string
+        }
+        Update: {
+          account?: string
+          amount?: number
+          campaign_id?: string | null
+          created_at?: string
+          detail?: string
+          id?: string
+          kind?: string
+          organisation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_transactions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credit_transactions_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       interview_bookings: {
         Row: {
           campaign_id: string
@@ -1066,6 +1114,14 @@ export type Database = {
           p_consent_type: Database["public"]["Enums"]["consent_type_enum"]
           p_source: string
           p_token: string
+        }
+        Returns: undefined
+      }
+      record_sms_send_cost: {
+        Args: {
+          p_amount: number
+          p_campaign_id: string
+          p_recipient_count: number
         }
         Returns: undefined
       }
