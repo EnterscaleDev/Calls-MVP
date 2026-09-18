@@ -70,13 +70,13 @@
   --color-danger-soft: var(--danger-soft);
   --color-neutral-soft: var(--neutral-soft);
 
-  --font-sans: var(--font-fraunces);
+  --font-sans: var(--font-plus-jakarta-sans);
 }
 
 body {
   background: var(--color-background);
   color: var(--color-foreground);
-  font-family: var(--font-sans), Georgia, "Times New Roman", serif;
+  font-family: var(--font-sans), system-ui, Arial, Helvetica, sans-serif;
 }
 
 * {
