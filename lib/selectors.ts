@@ -1,5 +1,6 @@
 import type { AppData } from "./app-data";
 import type {
+  AppointmentReminder,
   AssignmentStatus,
   Campaign,
   CampaignFunnel,
@@ -223,4 +224,13 @@ export function getAuditLog(db: Pick<AppData, "auditEvents">, campaignId?: strin
   return [...db.auditEvents]
     .filter((e) => !campaignId || e.campaignId === campaignId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function getRemindersForBooking(
+  db: Pick<AppData, "appointmentReminders">,
+  bookingId: string
+): AppointmentReminder[] {
+  return [...db.appointmentReminders]
+    .filter((r) => r.bookingId === bookingId)
+    .sort((a, b) => a.scheduledFor.localeCompare(b.scheduledFor));
 }

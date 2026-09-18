@@ -20,6 +20,8 @@ const ACTION_LABELS: Record<string, string> = {
   campaign_restored: "Campaign restored from archive",
   campaign_details_updated: "Campaign details edited",
   campaign_recording_setting_changed: "Recording setting changed",
+  campaign_reminder_settings_changed: "Reminder settings changed",
+  reminder_resent: "Reminder resent",
   contact_numbers_revealed: "Contact numbers revealed",
   credits_topped_up: "Credits topped up",
   contacts_imported: "Contacts imported",

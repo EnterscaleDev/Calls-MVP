@@ -1296,6 +1296,10 @@ export type Database = {
         }
         Returns: number
       }
+      admin_requeue_reminder: {
+        Args: { p_reminder_id: string }
+        Returns: undefined
+      }
       admin_resend_invitation: {
         Args: { p_invitation_id: string }
         Returns: {
@@ -1340,6 +1344,17 @@ export type Database = {
       }
       admin_update_campaign_recording: {
         Args: { p_campaign_id: string; p_recording_enabled: boolean }
+        Returns: undefined
+      }
+      admin_update_campaign_reminder_settings: {
+        Args: {
+          p_campaign_id: string
+          p_reminder_1h_offset_minutes: number
+          p_reminder_24h_offset_minutes: number
+          p_send_booking_confirmation: boolean
+          p_send_reminder_1h: boolean
+          p_send_reminder_24h: boolean
+        }
         Returns: undefined
       }
       admin_update_campaign_status: {
@@ -1443,6 +1458,25 @@ export type Database = {
       }
       fn_claim_due_reminders: {
         Args: { p_limit?: number }
+        Returns: {
+          booking_id: string
+          campaign_name: string
+          campaign_participant_id: string
+          client_name: string
+          duration_minutes: number
+          first_name: string
+          incentive_description: string
+          incentive_title: string
+          phone: string
+          reminder_id: string
+          reminder_type: Database["public"]["Enums"]["appointment_reminder_type_enum"]
+          scheduled_start: string
+          send_attempts: number
+          timezone: string
+        }[]
+      }
+      fn_claim_reminder_by_id: {
+        Args: { p_reminder_id: string }
         Returns: {
           booking_id: string
           campaign_name: string

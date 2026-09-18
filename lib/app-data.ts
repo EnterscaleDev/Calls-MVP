@@ -1,5 +1,6 @@
 import type {
   AgentProfile,
+  AppointmentReminder,
   AuditEvent,
   Campaign,
   CampaignAgent,
@@ -37,4 +38,5 @@ export interface AppData {
   callAttempts: CallAttempt[];
   recordings: Recording[];
   auditEvents: AuditEvent[];
+  appointmentReminders: AppointmentReminder[];
 }

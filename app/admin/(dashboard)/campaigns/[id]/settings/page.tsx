@@ -14,6 +14,7 @@ import { EmptyState, LoadingScreen, ErrorState, InlineBanner } from "@/component
 import { formatDateTime } from "../../../_lib/format";
 import { useCampaignDetail } from "../campaign-context";
 import { DeleteCampaignModal } from "../../_components/DeleteCampaignModal";
+import { ReminderSettingsCard } from "./_components/ReminderSettingsCard";
 import type { Campaign, CampaignStatus } from "@/lib/types";
 
 export default function CampaignSettingsPage() {
@@ -176,6 +177,8 @@ export default function CampaignSettingsPage() {
           </Field>
         </CardBody>
       </Card>
+
+      <ReminderSettingsCard campaign={liveCampaign} onSaved={refetch} />
 
       <Card>
         <CardHeader title="Campaign audit" description="Every recorded action for this campaign, most recent first." />

@@ -16,6 +16,7 @@ import type {
   CampaignAgent,
   Recording,
   AuditEvent,
+  AppointmentReminder,
 } from "@/lib/types";
 import type { OrgCredits } from "@/lib/app-data";
 
@@ -33,6 +34,7 @@ type AgentInvitationRow = Database["public"]["Tables"]["user_invitations"]["Row"
 type CampaignAgentRow = Database["public"]["Tables"]["campaign_agents"]["Row"];
 type RecordingRow = Database["public"]["Tables"]["recordings"]["Row"];
 type AuditEventRow = Database["public"]["Tables"]["audit_events"]["Row"];
+type AppointmentReminderRow = Database["public"]["Tables"]["appointment_reminders"]["Row"];
 type OrgCreditsRow = Database["public"]["Tables"]["org_credits"]["Row"];
 type MaskedContactRow =
   Database["public"]["Functions"]["contacts_list_masked"]["Returns"][number];
@@ -56,6 +58,11 @@ function mapCampaign(row: CampaignRow): Campaign {
     incentiveDescription: row.incentive_description,
     senderId: row.sender_id,
     recordingEnabled: row.recording_enabled,
+    sendBookingConfirmation: row.send_booking_confirmation,
+    sendReminder24h: row.send_reminder_24h,
+    sendReminder1h: row.send_reminder_1h,
+    reminder24hOffsetMinutes: row.reminder_24h_offset_minutes,
+    reminder1hOffsetMinutes: row.reminder_1h_offset_minutes,
     createdBy: row.created_by_name,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -179,6 +186,27 @@ function mapRecording(row: RecordingRow): Recording {
   };
 }
 
+function mapAppointmentReminder(row: AppointmentReminderRow): AppointmentReminder {
+  return {
+    id: row.id,
+    campaignId: row.campaign_id,
+    campaignParticipantId: row.campaign_participant_id,
+    bookingId: row.booking_id,
+    reminderType: row.reminder_type,
+    status: row.status,
+    scheduledFor: row.scheduled_for,
+    sendAttempts: row.send_attempts,
+    sentAt: row.sent_at ?? undefined,
+    deliveredAt: row.delivered_at ?? undefined,
+    failedAt: row.failed_at ?? undefined,
+    cancelledAt: row.cancelled_at ?? undefined,
+    failureReason: row.failure_reason ?? undefined,
+    providerMessageId: row.provider_message_id ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 function mapAuditEvent(row: AuditEventRow): AuditEvent {
   return {
     id: row.id,
@@ -224,6 +252,7 @@ export interface AdminData {
   campaignAgents: CampaignAgent[];
   recordings: Recording[];
   auditEvents: AuditEvent[];
+  appointmentReminders: AppointmentReminder[];
   orgCredits: OrgCredits;
 }
 
@@ -261,6 +290,7 @@ export function useAdminData() {
       recordings,
       maskedContacts,
       auditEvents,
+      appointmentReminders,
       orgCredits,
     ] = await Promise.all([
       supabase.from("campaigns").select("*"),
@@ -275,6 +305,7 @@ export function useAdminData() {
       supabase.from("recordings").select("*"),
       supabase.rpc("contacts_list_masked"),
       supabase.from("audit_events").select("*"),
+      supabase.from("appointment_reminders").select("*"),
       supabase.from("org_credits").select("*").single(),
     ]);
 
@@ -291,6 +322,7 @@ export function useAdminData() {
       recordings.error ||
       maskedContacts.error ||
       auditEvents.error ||
+      appointmentReminders.error ||
       orgCredits.error;
     if (firstError) {
       setError(firstError.message);
@@ -312,6 +344,7 @@ export function useAdminData() {
       recordings: (recordings.data ?? []).map(mapRecording),
       contacts: (maskedContacts.data ?? []).map(mapMaskedContact),
       auditEvents: (auditEvents.data ?? []).map(mapAuditEvent),
+      appointmentReminders: (appointmentReminders.data ?? []).map(mapAppointmentReminder),
       orgCredits: { sms: orgCreditsRow.sms, voiceMinutes: orgCreditsRow.voice_minutes },
     });
     setLoading(false);

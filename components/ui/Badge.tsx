@@ -80,6 +80,17 @@ const AGENT_STATUS_TONE: Record<string, Tone> = {
   inactive: "neutral",
 };
 
+const REMINDER_STATUS_TONE: Record<string, Tone> = {
+  scheduled: "neutral",
+  processing: "info",
+  queued: "info",
+  sent: "info",
+  delivered: "success",
+  failed: "danger",
+  cancelled: "neutral",
+  skipped: "warning",
+};
+
 function labelize(value: string): string {
   return value
     .split("_")
@@ -114,6 +125,9 @@ export function InvitationStatusBadge({ status }: { status: string }) {
 }
 export function AgentStatusBadge({ status }: { status: string }) {
   return <StatusBadge status={status} map={AGENT_STATUS_TONE} />;
+}
+export function ReminderStatusBadge({ status }: { status: string }) {
+  return <StatusBadge status={status} map={REMINDER_STATUS_TONE} />;
 }
 
 /** The navy-outlined "campaign type" chip, e.g. "INTERVIEW" — a distinct treatment from status pills. */

@@ -29,6 +29,11 @@ export interface Campaign {
   incentiveDescription: string;
   senderId: string;
   recordingEnabled: boolean;
+  sendBookingConfirmation: boolean;
+  sendReminder24h: boolean;
+  sendReminder1h: boolean;
+  reminder24hOffsetMinutes: number;
+  reminder1hOffsetMinutes: number;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -225,6 +230,42 @@ export interface CallScriptSection {
   title: string;
   instructions?: string;
   questions: string[];
+}
+
+export type ReminderType =
+  | "booking_confirmation"
+  | "reminder_24h"
+  | "reminder_1h"
+  | "reschedule_confirmation"
+  | "cancellation_confirmation";
+
+export type ReminderStatus =
+  | "scheduled"
+  | "processing"
+  | "queued"
+  | "sent"
+  | "delivered"
+  | "failed"
+  | "cancelled"
+  | "skipped";
+
+export interface AppointmentReminder {
+  id: string;
+  campaignId: string;
+  campaignParticipantId: string;
+  bookingId: string;
+  reminderType: ReminderType;
+  status: ReminderStatus;
+  scheduledFor: string;
+  sendAttempts: number;
+  sentAt?: string;
+  deliveredAt?: string;
+  failedAt?: string;
+  cancelledAt?: string;
+  failureReason?: string;
+  providerMessageId?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type ActorType = "admin" | "agent" | "participant" | "system";

@@ -2,8 +2,10 @@
 
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Bell } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAdminData } from "@/lib/hooks/useAdminData";
+import { getRemindersForBooking } from "@/lib/selectors";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Form";
 import { Button } from "@/components/ui/Button";
@@ -12,7 +14,22 @@ import { AssignmentStatusBadge } from "@/components/ui/Badge";
 import { formatDateTime, formatTime, formatDate } from "../../../_lib/format";
 import { useCampaignDetail } from "../campaign-context";
 import { cn } from "@/lib/cn";
+import { BookingReminderModal } from "./_components/BookingReminderModal";
 import type { AgentProfile, InterviewBooking, CallAssignment } from "@/lib/types";
+
+/** A short "3 sent, 1 failed"-style summary for a booking's reminders,
+ *  compact enough for a board card. Undefined when there's nothing to show
+ *  (no reminders exist yet, or none stand out). */
+function reminderSummary(reminders: ReturnType<typeof getRemindersForBooking>): { label: string; tone: "danger" | "warning" | "neutral" } | undefined {
+  if (reminders.length === 0) return undefined;
+  const failed = reminders.filter((r) => r.status === "failed").length;
+  if (failed > 0) return { label: `${failed} failed`, tone: "danger" };
+  const pending = reminders.filter((r) => r.status === "scheduled" || r.status === "processing").length;
+  if (pending > 0) return { label: `${pending} upcoming`, tone: "neutral" };
+  const sent = reminders.filter((r) => r.status === "sent" || r.status === "delivered").length;
+  if (sent > 0) return { label: `${sent} sent`, tone: "neutral" };
+  return undefined;
+}
 
 type Bucket = "unscheduled" | "unassigned" | "today" | "upcoming" | "overdue" | "completed" | "cancelled";
 
@@ -59,6 +76,7 @@ function SchedulingPageInner() {
   );
   const [pendingAgent, setPendingAgent] = useState<Record<string, string>>({});
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [reminderTarget, setReminderTarget] = useState<SchedulingRow | null>(null);
 
   const rows = useMemo<SchedulingRow[]>(() => {
     if (!db) return [];
@@ -235,35 +253,52 @@ function SchedulingPageInner() {
                       Nothing here
                     </div>
                   ) : (
-                    colRows.map((row) => (
-                      <Card key={row.participantId} className="p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium text-foreground">{row.contactName}</p>
-                          {row.agent ? (
-                            <span
-                              title={row.agent.name}
-                              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-white"
-                            >
-                              {initials(row.agent.name)}
-                            </span>
+                    colRows.map((row) => {
+                      const reminders = row.booking ? getRemindersForBooking(db, row.booking.id) : [];
+                      const summary = reminderSummary(reminders);
+                      return (
+                        <Card key={row.participantId} className="p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-medium text-foreground">{row.contactName}</p>
+                            {row.agent ? (
+                              <span
+                                title={row.agent.name}
+                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-white"
+                              >
+                                {initials(row.agent.name)}
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-xs text-foreground-muted">
+                            {row.booking
+                              ? `${formatDate(row.booking.scheduledStart)} · ${formatTime(row.booking.scheduledStart)}`
+                              : "No slot chosen yet"}
+                          </p>
+                          {!NO_ASSIGN_BUCKETS.has(col.key) ? (
+                            <div className="mt-2">
+                              <AssignControl row={row} compact />
+                            </div>
+                          ) : row.assignment ? (
+                            <div className="mt-2">
+                              <AssignmentStatusBadge status={row.assignment.status} />
+                            </div>
                           ) : null}
-                        </div>
-                        <p className="mt-1 text-xs text-foreground-muted">
-                          {row.booking
-                            ? `${formatDate(row.booking.scheduledStart)} · ${formatTime(row.booking.scheduledStart)}`
-                            : "No slot chosen yet"}
-                        </p>
-                        {!NO_ASSIGN_BUCKETS.has(col.key) ? (
-                          <div className="mt-2">
-                            <AssignControl row={row} compact />
-                          </div>
-                        ) : row.assignment ? (
-                          <div className="mt-2">
-                            <AssignmentStatusBadge status={row.assignment.status} />
-                          </div>
-                        ) : null}
-                      </Card>
-                    ))
+                          {row.booking && reminders.length > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => setReminderTarget(row)}
+                              className={cn(
+                                "mt-2 flex items-center gap-1 text-xs font-medium hover:underline",
+                                summary?.tone === "danger" ? "text-danger" : "text-foreground-muted"
+                              )}
+                            >
+                              <Bell className="h-3 w-3" />
+                              {summary ? summary.label : "Reminders"}
+                            </button>
+                          ) : null}
+                        </Card>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -307,13 +342,17 @@ function SchedulingPageInner() {
                         <th className="px-5 py-3 font-medium">Status</th>
                         <th className="px-5 py-3 font-medium">Assigned agent</th>
                         <th className="px-5 py-3 font-medium">Assignment status</th>
+                        <th className="px-5 py-3 font-medium">Reminders</th>
                         {!NO_ASSIGN_BUCKETS.has(activeBucket) ? (
                           <th className="px-5 py-3 font-medium">Action</th>
                         ) : null}
                       </tr>
                     </thead>
                     <tbody>
-                      {visibleRows.map((row) => (
+                      {visibleRows.map((row) => {
+                        const reminders = row.booking ? getRemindersForBooking(db, row.booking.id) : [];
+                        const summary = reminderSummary(reminders);
+                        return (
                         <tr key={row.participantId} className="border-b border-border last:border-0">
                           <td className="px-5 py-3 font-medium text-foreground">{row.contactName}</td>
                           <td className="px-5 py-3 tabular-nums text-foreground-muted">
@@ -328,13 +367,31 @@ function SchedulingPageInner() {
                               <span className="text-foreground-subtle">—</span>
                             )}
                           </td>
+                          <td className="px-5 py-3">
+                            {row.booking && reminders.length > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => setReminderTarget(row)}
+                                className={cn(
+                                  "flex items-center gap-1 text-xs font-medium hover:underline",
+                                  summary?.tone === "danger" ? "text-danger" : "text-foreground-muted"
+                                )}
+                              >
+                                <Bell className="h-3 w-3" />
+                                {summary ? summary.label : "View"}
+                              </button>
+                            ) : (
+                              <span className="text-foreground-subtle">—</span>
+                            )}
+                          </td>
                           {!NO_ASSIGN_BUCKETS.has(activeBucket) ? (
                             <td className="px-5 py-3">
                               <AssignControl row={row} />
                             </td>
                           ) : null}
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -343,6 +400,14 @@ function SchedulingPageInner() {
           </Card>
         </>
       )}
+
+      <BookingReminderModal
+        booking={reminderTarget?.booking ?? null}
+        contactName={reminderTarget?.contactName ?? ""}
+        db={db}
+        onClose={() => setReminderTarget(null)}
+        onChanged={() => refetch()}
+      />
     </div>
   );
 }

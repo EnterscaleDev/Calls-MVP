@@ -1,9 +1,8 @@
-import "server-only";
-
 /**
  * SMS copy for the five appointment-reminder message types. Pure
- * string-building — no DB/network access — so it's easy to unit-test and
- * reused as-is by the cron dispatch route.
+ * string-building — no DB/network access, no secrets — so it's safe to
+ * import from both the cron dispatch route (server) and the campaign
+ * Settings page's message preview (client).
  */
 
 export type ReminderMessageType =
