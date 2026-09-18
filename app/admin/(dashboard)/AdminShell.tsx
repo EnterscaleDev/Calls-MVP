@@ -14,6 +14,7 @@ import {
   LogOut,
   MessageSquare,
   Mic,
+  Hash,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/cn";
@@ -23,6 +24,7 @@ const NAV = [
   { href: "/admin/campaigns", label: "Campaigns", icon: Megaphone },
   { href: "/admin/agents", label: "People", icon: Users },
   { href: "/admin/call-activity", label: "Call Activity", icon: PhoneCall },
+  { href: "/admin/sender-ids", label: "Sender IDs", icon: Hash },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 

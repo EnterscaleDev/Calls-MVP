@@ -5,44 +5,16 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAdminData } from "@/lib/hooks/useAdminData";
 import { getAuditLog } from "@/lib/selectors";
+import { SENSITIVE_ACTIONS, ACCESS_ACTIONS, describeAction } from "@/lib/audit-labels";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Select, Input } from "@/components/ui/Form";
 import { CampaignStatusBadge, Badge } from "@/components/ui/Badge";
 import { EmptyState, LoadingScreen, ErrorState, InlineBanner } from "@/components/ui/States";
 import { Modal } from "@/components/ui/Modal";
-import { formatDateTime, labelize } from "../../../_lib/format";
+import { formatDateTime } from "../../../_lib/format";
 import { useCampaignDetail } from "../campaign-context";
 import type { CampaignStatus } from "@/lib/types";
-
-const SENSITIVE_ACTIONS = new Set(["recording_accessed", "data_exported", "contact_numbers_revealed"]);
-const ACCESS_ACTIONS = new Set(["recording_accessed", "contact_numbers_revealed"]);
-
-function describeAction(action: string): string {
-  const map: Record<string, string> = {
-    campaign_created: "Campaign created",
-    campaign_deleted: "Campaign deleted",
-    campaign_status_changed: "Status changed",
-    campaign_recording_setting_changed: "Recording setting changed",
-    contact_numbers_revealed: "Contact numbers revealed",
-    credits_topped_up: "Credits topped up",
-    contacts_imported: "Contacts imported",
-    invitation_sent: "Invitation sent",
-    sms_batch_sent: "SMS batch sent",
-    consent_recorded: "Consent recorded",
-    booking_created: "Booking created",
-    booking_rescheduled: "Booking rescheduled",
-    booking_cancelled: "Booking cancelled",
-    agent_invited: "Agent invited",
-    agent_attached_to_campaign: "Agent attached to campaign",
-    agent_detached_from_campaign: "Agent removed from campaign",
-    participant_assigned: "Participant assigned to agent",
-    participant_reassigned: "Participant reassigned",
-    call_initiated: "Call initiated",
-    call_outcome_submitted: "Call outcome submitted",
-  };
-  return map[action] ?? labelize(action);
-}
 
 export default function CampaignSettingsPage() {
   const router = useRouter();

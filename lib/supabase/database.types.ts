@@ -857,6 +857,47 @@ export type Database = {
           },
         ]
       }
+      sender_ids: {
+        Row: {
+          approved_at: string | null
+          client_name: string
+          created_at: string
+          id: string
+          organisation_id: string
+          requested_at: string
+          sender_id: string
+          status: Database["public"]["Enums"]["sender_id_status_enum"]
+        }
+        Insert: {
+          approved_at?: string | null
+          client_name: string
+          created_at?: string
+          id?: string
+          organisation_id: string
+          requested_at?: string
+          sender_id: string
+          status?: Database["public"]["Enums"]["sender_id_status_enum"]
+        }
+        Update: {
+          approved_at?: string | null
+          client_name?: string
+          created_at?: string
+          id?: string
+          organisation_id?: string
+          requested_at?: string
+          sender_id?: string
+          status?: Database["public"]["Enums"]["sender_id_status_enum"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sender_ids_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1120,6 +1161,7 @@ export type Database = {
         | "available"
         | "failed"
         | "unavailable"
+      sender_id_status_enum: "pending" | "active" | "rejected"
       user_role_enum: "admin" | "agent"
     }
     CompositeTypes: {
@@ -1310,6 +1352,7 @@ export const Constants = {
         "failed",
         "unavailable",
       ],
+      sender_id_status_enum: ["pending", "active", "rejected"],
       user_role_enum: ["admin", "agent"],
     },
   },
