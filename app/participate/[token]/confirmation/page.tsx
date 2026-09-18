@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { CalendarCheck, Clock3, PhoneCall } from "lucide-react";
 import {
   cancelParticipantBooking,
   rescheduleParticipantBooking,
@@ -10,7 +11,38 @@ import {
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { InlineBanner } from "@/components/ui/States";
+import { cn } from "@/lib/cn";
 import { SlotPicker, formatSlotRange } from "../_components/SlotPicker";
+
+/** Icon-in-circle info row, matching the consent page's "Good to know" treatment. */
+function InfoRow({
+  icon,
+  tone,
+  title,
+  description,
+}: {
+  icon: ReactNode;
+  tone: "primary" | "navy";
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 py-3.5">
+      <div
+        className={cn(
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+          tone === "primary" ? "bg-primary-soft text-primary" : "bg-navy-soft text-navy"
+        )}
+      >
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        <p className="mt-0.5 text-sm text-foreground-muted">{description}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function ConfirmationPage() {
   const router = useRouter();
@@ -106,38 +138,40 @@ export default function ConfirmationPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <InlineBanner kind="success">You&apos;re booked!</InlineBanner>
+      <div className="flex flex-col items-center gap-2 rounded-[8px] bg-navy px-5 py-7 text-center text-white">
+        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15">
+          <CalendarCheck size={22} />
+        </div>
+        <p className="label-caps text-white/70">You&apos;re booked</p>
+        <p className="text-2xl font-bold leading-tight text-white">{day}</p>
+        <p className="text-sm text-white/85">{time}</p>
+      </div>
 
       <Card>
-        <CardBody className="flex flex-col gap-4">
-          <div>
-            <p className="text-xs font-medium text-foreground-subtle">Your interview</p>
-            <p className="mt-0.5 text-lg font-semibold text-foreground">{day}</p>
-            <p className="text-sm text-foreground-muted">{time}</p>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-foreground-subtle">Expected duration</p>
-            <p className="mt-0.5 text-sm text-foreground">
-              About {campaign.estimatedDurationMinutes} minutes
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-foreground-subtle">What to expect</p>
-            <p className="mt-0.5 text-sm text-foreground-muted">
-              A researcher from {campaign.clientName} will call you at your scheduled time. Please
-              have a few quiet minutes free to talk.
-            </p>
-          </div>
-          {campaign.incentiveTitle ? (
-            <div className="rounded-[6px] border border-primary-soft-border bg-primary-soft px-3 py-2.5">
-              <p className="text-sm font-semibold text-primary">{campaign.incentiveTitle}</p>
-              {campaign.incentiveDescription ? (
-                <p className="mt-0.5 text-xs text-foreground-muted">{campaign.incentiveDescription}</p>
-              ) : null}
-            </div>
-          ) : null}
+        <CardBody className="divide-y divide-border py-0">
+          <InfoRow
+            icon={<Clock3 className="h-[18px] w-[18px]" />}
+            tone="primary"
+            title="Expected duration"
+            description={`About ${campaign.estimatedDurationMinutes} minutes`}
+          />
+          <InfoRow
+            icon={<PhoneCall className="h-[18px] w-[18px]" />}
+            tone="navy"
+            title="What to expect"
+            description={`A researcher from ${campaign.clientName} will call you at your scheduled time. Please have a few quiet minutes free to talk.`}
+          />
         </CardBody>
       </Card>
+
+      {campaign.incentiveTitle ? (
+        <div className="rounded-[6px] border border-primary-soft-border bg-primary-soft px-4 py-3">
+          <p className="text-sm font-semibold text-primary">{campaign.incentiveTitle}</p>
+          {campaign.incentiveDescription ? (
+            <p className="mt-0.5 text-xs text-foreground-muted">{campaign.incentiveDescription}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="flex gap-2">
         <Button variant="secondary" className="flex-1 justify-center" onClick={() => setMode("reschedule")}>
