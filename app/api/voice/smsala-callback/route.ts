@@ -6,20 +6,23 @@ import { createServiceClient } from "@/lib/supabase/service";
  * session exists here, so this runs under the service-role client (same
  * trust boundary as app/api/sms/dotgo-callback/route.ts).
  *
- * SMSala's docs don't give a parameter table for this callback at all —
- * only the synchronous VoiceBridge response shape is documented
- * (VoiceResponseId, CallSubmitted, ClientUniqueId, DtmfResponse,
- * CallStatusCode, CallCost, Remarks). This handler assumes the callback
- * reuses that same shape (accepting both PascalCase and the lowerCamelCase
- * request-param spelling defensively) and maps status this way, pending a
- * real call to confirm:
- *  - a numeric CallCost present  -> call ended (cost is only known once
- *    duration is known)
- *  - Remarks/CallStatusCode indicating an error -> failed
- *  - otherwise -> connected (the call is bridged/active)
- * "ended" here only marks status — duration_seconds still comes from the
- * agent's own End Call action (lib/server, call workspace), since no
- * duration field is documented in any SMSala payload.
+ * CONFIRMED NOT WORKING: tested against a real, fully successful, completed
+ * two-party bridge call (both legs rang, both sides actually spoke) with
+ * callBackUrl set to this route on every request — nothing ever arrived.
+ * SMSala's callBackUrl mechanism simply doesn't fire for Voice Bridge,
+ * regardless of outcome. This route is kept in case that changes on their
+ * end (worth asking their support directly), but nothing in the app may
+ * depend on it actually being called — see the call workspace's polling
+ * fallback (app/agent/(queue)/call/[assignmentId]/page.tsx), which treats
+ * a successful bridge submission as sufficient evidence the call is
+ * connected after a short grace period, specifically because of this gap.
+ *
+ * The status-mapping logic below is unverified for the same reason (no
+ * real payload has ever been observed to test it against) — it's a
+ * best-effort guess based only on the synchronous VoiceBridge response
+ * shape (VoiceResponseId, CallSubmitted, ClientUniqueId, DtmfResponse,
+ * CallStatusCode, CallCost, Remarks), which SMSala's docs don't confirm the
+ * callback reuses.
  *
  * Correlates to a call_attempts row via ClientUniqueId, which
  * app/api/voice/bridge/route.ts sets to the attempt's own id.

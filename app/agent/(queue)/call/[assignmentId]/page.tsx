@@ -244,6 +244,14 @@ export default function CallWorkspacePage({
       // (app/api/voice/smsala-callback/route.ts), which writes straight to
       // this call_attempts row — poll it rather than a synchronous
       // progress callback like the old mock provider gave us.
+      //
+      // The webhook isn't confirmed reliable yet (see route.ts), so this
+      // treats a successful bridgeCall submission as good-enough evidence
+      // the call is happening: if no webhook update arrives within a short
+      // grace period, it optimistically moves to "connected" instead of
+      // giving up — a real submitted call shouldn't get reported as
+      // "failed" just because a webhook never landed. A genuine failure or
+      // completion signal, if the webhook does arrive, still overrides this.
       let elapsedPollMs = 0;
       pollRef.current = setInterval(async () => {
         elapsedPollMs += 2000;
@@ -262,11 +270,14 @@ export default function CallWorkspacePage({
         } else if (row?.status === "failed" || row?.status === "ended") {
           setCallState(row.status);
           if (pollRef.current) clearInterval(pollRef.current);
-        } else if (elapsedPollMs >= 60000) {
-          // No status update from SMSala in 60s — stop polling rather than
-          // spin forever; the agent can still end/retry manually.
-          setCallState("failed");
-          await supabase.from("call_attempts").update({ status: "failed" }).eq("id", attemptId);
+        } else if (elapsedPollMs >= 20000) {
+          // No webhook update in 20s — assume connected rather than failed,
+          // since SMSala already confirmed the call was submitted.
+          const now = new Date().toISOString();
+          connectedAtRef.current = Date.now();
+          setConnectedAt(Date.now());
+          setCallState("connected");
+          await supabase.from("call_attempts").update({ status: "connected", connected_at: now }).eq("id", attemptId);
           if (pollRef.current) clearInterval(pollRef.current);
         }
       }, 2000);
