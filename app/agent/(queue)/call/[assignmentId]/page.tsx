@@ -8,7 +8,6 @@ import { Field, Select, Textarea } from "@/components/ui/Form";
 import { ErrorState, LoadingScreen } from "@/components/ui/States";
 import { Modal } from "@/components/ui/Modal";
 import { createClient } from "@/lib/supabase/client";
-import { mockTelephonyProvider, type CallProgressEvent } from "@/lib/adapters/telephony";
 import type { AssignmentStatus, CallAttemptStatus, CallOutcome, CallScriptSection } from "@/lib/types";
 import { formatDateTime, formatElapsed, OUTCOME_OPTIONS, outcomeRequiresNotes } from "../../_utils";
 
@@ -60,6 +59,13 @@ export default function CallWorkspacePage({
   const [submitting, setSubmitting] = useState(false);
 
   const connectedAtRef = useRef<number | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -215,26 +221,55 @@ export default function CallWorkspacePage({
         });
       }
 
-      const { providerCallId } = await mockTelephonyProvider.initiateMaskedCall(
-        assignment.id,
-        async (event: CallProgressEvent) => {
-          setCallState(event);
-          const patch: { status: CallProgressEvent; connected_at?: string } = { status: event };
-          if (event === "connected") {
-            const now = Date.now();
-            connectedAtRef.current = now;
-            setConnectedAt(now);
-            patch.connected_at = new Date().toISOString();
-          }
-          // supabase-js query builders are lazy thenables — the request is
-          // only actually sent once awaited/`.then()`-ed, so this must be
-          // awaited even though the caller (mockTelephonyProvider) doesn't
-          // await onProgress itself.
-          await supabase.from("call_attempts").update(patch).eq("id", attemptId);
-        }
-      );
+      setCallState("connecting");
+      await supabase.from("call_attempts").update({ status: "connecting" }).eq("id", attemptId);
 
-      await supabase.from("call_attempts").update({ provider_call_id: providerCallId }).eq("id", attemptId);
+      const bridgeResponse = await fetch("/api/voice/bridge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignmentId: assignment.id, clientUniqueId: attemptId }),
+      });
+      const bridgeResult = (await bridgeResponse.json().catch(() => ({
+        ok: false,
+        errorReason: "Unexpected response from the call endpoint.",
+      }))) as { ok: true } | { ok: false; errorReason: string };
+
+      if (!bridgeResult.ok) {
+        setCallState("failed");
+        await supabase.from("call_attempts").update({ status: "failed" }).eq("id", attemptId);
+        return;
+      }
+
+      // Real ringing/answered status arrives async via SMSala's callBackUrl
+      // (app/api/voice/smsala-callback/route.ts), which writes straight to
+      // this call_attempts row — poll it rather than a synchronous
+      // progress callback like the old mock provider gave us.
+      let elapsedPollMs = 0;
+      pollRef.current = setInterval(async () => {
+        elapsedPollMs += 2000;
+        const { data: row } = await supabase
+          .from("call_attempts")
+          .select("status, connected_at")
+          .eq("id", attemptId)
+          .maybeSingle();
+
+        if (row?.status === "connected" && row.connected_at) {
+          const now = new Date(row.connected_at).getTime();
+          connectedAtRef.current = now;
+          setConnectedAt(now);
+          setCallState("connected");
+          if (pollRef.current) clearInterval(pollRef.current);
+        } else if (row?.status === "failed" || row?.status === "ended") {
+          setCallState(row.status);
+          if (pollRef.current) clearInterval(pollRef.current);
+        } else if (elapsedPollMs >= 60000) {
+          // No status update from SMSala in 60s — stop polling rather than
+          // spin forever; the agent can still end/retry manually.
+          setCallState("failed");
+          await supabase.from("call_attempts").update({ status: "failed" }).eq("id", attemptId);
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+      }, 2000);
     } catch {
       setCallState("failed");
     }

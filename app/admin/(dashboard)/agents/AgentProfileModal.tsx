@@ -27,6 +27,7 @@ export function AgentProfileModal({
   onClose: () => void;
 }) {
   const [selections, setSelections] = useState<Record<string, { checked: boolean; target: string }>>({});
+  const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export function AgentProfileModal({
       };
     }
     setSelections(next);
+    setPhone(agent.phone);
     // Re-derive whenever a different agent is opened, or campaigns/attachments change underneath us.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agent?.id, db?.campaigns, db?.campaignAgents]);
@@ -63,6 +65,9 @@ export function AgentProfileModal({
     if (!agent || !db) return;
     setSaving(true);
     const supabase = createClient();
+    if (phone !== agent.phone) {
+      await supabase.from("agent_profiles").update({ phone: phone.trim() }).eq("id", agent.id);
+    }
     for (const campaign of db.campaigns) {
       const selection = selections[campaign.id];
       if (!selection) continue;
@@ -117,6 +122,19 @@ export function AgentProfileModal({
         <p className="-mt-2 text-xs text-foreground-muted">
           {agent.email} · joined {formatDate(agent.createdAt)}
         </p>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-foreground">Phone (for real calls)</label>
+          <Input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+2348012345678"
+          />
+          <p className="mt-1 text-xs text-foreground-subtle">
+            Real telephony rings this number first, then bridges to the participant. Required before this
+            agent can start a real call.
+          </p>
+        </div>
 
         <div className="grid grid-cols-3 gap-3">
           <StatCard label="Today" value={`${stats.completedToday}/${stats.assignedToday}`} />

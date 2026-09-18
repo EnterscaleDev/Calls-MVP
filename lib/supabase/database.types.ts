@@ -24,6 +24,7 @@ export type Database = {
           id: string
           name: string
           organisation_id: string
+          phone: string
           status: Database["public"]["Enums"]["agent_status_enum"]
         }
         Insert: {
@@ -32,6 +33,7 @@ export type Database = {
           id?: string
           name: string
           organisation_id: string
+          phone?: string
           status?: Database["public"]["Enums"]["agent_status_enum"]
         }
         Update: {
@@ -40,6 +42,7 @@ export type Database = {
           id?: string
           name?: string
           organisation_id?: string
+          phone?: string
           status?: Database["public"]["Enums"]["agent_status_enum"]
         }
         Relationships: [
@@ -1011,6 +1014,7 @@ export type Database = {
           p_daily_target?: number
           p_email: string
           p_name: string
+          p_phone?: string
         }
         Returns: string
       }

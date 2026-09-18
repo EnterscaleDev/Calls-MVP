@@ -35,6 +35,7 @@ export default function AgentsPage() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [campaignId, setCampaignId] = useState("");
   const [dailyTarget, setDailyTarget] = useState("8");
   const [formError, setFormError] = useState("");
@@ -72,6 +73,7 @@ export default function AgentsPage() {
     const { error: rpcError } = await supabase.rpc("admin_invite_agent", {
       p_name: name.trim(),
       p_email: email.trim(),
+      p_phone: phone.trim() || undefined,
       p_campaign_id: campaignId || undefined,
       p_daily_target: Number(dailyTarget) || undefined,
     });
@@ -83,6 +85,7 @@ export default function AgentsPage() {
     setInviteOpen(false);
     setName("");
     setEmail("");
+    setPhone("");
     setCampaignId("");
     setDailyTarget("8");
     await refetch();
@@ -214,6 +217,9 @@ export default function AgentsPage() {
           </Field>
           <Field label="Email" required>
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          </Field>
+          <Field label="Phone" hint="Needed before this agent can start a real call — can add it later.">
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+2348012345678" />
           </Field>
           <Field label="Assigned campaign" hint="Optional — leave blank to invite them org-wide.">
             <Select value={campaignId} onChange={(e) => setCampaignId(e.target.value)}>

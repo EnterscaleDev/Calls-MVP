@@ -138,7 +138,7 @@ function mapAssignment(row: AssignmentRow): CallAssignment {
 }
 
 function mapAgent(row: AgentRow): AgentProfile {
-  return { id: row.id, name: row.name, email: row.email, status: row.status, createdAt: row.created_at };
+  return { id: row.id, name: row.name, email: row.email, phone: row.phone, status: row.status, createdAt: row.created_at };
 }
 
 function mapCampaignAgent(row: CampaignAgentRow): CampaignAgent {

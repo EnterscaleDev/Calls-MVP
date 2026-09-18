@@ -123,6 +123,7 @@ export interface AgentProfile {
   id: string;
   name: string;
   email: string;
+  phone: string;
   status: AgentStatus;
   createdAt: string;
 }
