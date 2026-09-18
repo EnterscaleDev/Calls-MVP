@@ -42,8 +42,8 @@ export default function SchedulePage() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-xl font-semibold text-foreground">Choose a time</h1>
-        <p className="mt-1 text-sm text-foreground-muted">
+        <h1 className="text-page-title">Choose a time</h1>
+        <p className="mt-1 text-page-subtitle">
           Pick a time that works for you. A researcher will call you at your scheduled time — it
           should take about {campaign.estimatedDurationMinutes} minutes.
         </p>

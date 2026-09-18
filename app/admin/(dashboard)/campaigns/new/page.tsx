@@ -121,8 +121,8 @@ export default function NewCampaignPage() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-xl font-semibold text-foreground">New Campaign</h1>
-        <p className="mt-1 text-sm text-foreground-muted">
+        <h1 className="text-page-title">New Campaign</h1>
+        <p className="mt-1 text-page-subtitle">
           Set up a telephone interview campaign. You can upload contacts and invite agents next.
         </p>
       </div>

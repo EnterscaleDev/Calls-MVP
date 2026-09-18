@@ -103,8 +103,8 @@ export default function ConfirmationPage() {
     return (
       <div className="flex flex-col gap-5">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Pick a new time</h1>
-          <p className="mt-1 text-sm text-foreground-muted">
+          <h1 className="text-page-title">Pick a new time</h1>
+          <p className="mt-1 text-page-subtitle">
             This will replace your current booking.
           </p>
         </div>

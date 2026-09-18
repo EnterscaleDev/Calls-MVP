@@ -61,11 +61,11 @@ export default function CampaignDetailLayout({
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold text-foreground">{campaign.name}</h1>
+              <h1 className="text-page-title">{campaign.name}</h1>
               <CampaignTypeChip>Telephone Interview</CampaignTypeChip>
               <CampaignStatusBadge status={campaign.status} />
             </div>
-            <p className="mt-1 text-sm text-foreground-muted">{campaign.clientName}</p>
+            <p className="mt-1 text-page-subtitle">{campaign.clientName}</p>
           </div>
           <div className="text-right text-sm text-foreground-muted">
             <p>

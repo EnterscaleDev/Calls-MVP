@@ -113,8 +113,8 @@ export default function SenderIdsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Sender IDs</h1>
-          <p className="mt-1 text-sm text-foreground-muted">
+          <h1 className="text-page-title">Sender IDs</h1>
+          <p className="mt-1 text-page-subtitle">
             Sender IDs belong to a client and are reused across that client&apos;s campaigns. Carrier
             approval happens outside this product — request the ID as soon as a campaign is scoped, not
             when it&apos;s ready to send.

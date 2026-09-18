@@ -70,7 +70,7 @@
   --color-danger-soft: var(--danger-soft);
   --color-neutral-soft: var(--neutral-soft);
 
-  --font-sans: var(--font-plus-jakarta-sans);
+  --font-sans: var(--font-manrope);
 }
 
 body {
@@ -83,9 +83,47 @@ body {
   border-color: var(--color-border);
 }
 
-.label-caps {
-  font-size: 0.65625rem;
+/*
+ * Type scale. A handful of roles, reused everywhere instead of one-off
+ * Tailwind text-size/weight combinations per component — the goal is
+ * visible contrast between a page title, a card's headline number, a
+ * card/row title, supporting copy, and an all-caps label, so the UI
+ * doesn't read as one flat size everywhere.
+ */
+.text-page-title {
+  font-size: 1.75rem; /* 28px */
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: -0.01em;
+  color: var(--color-foreground);
+}
+
+.text-page-subtitle {
+  font-size: 0.9375rem; /* 15px */
+  font-weight: 400;
+  color: var(--color-foreground-muted);
+}
+
+.text-stat-value {
+  font-size: 1.875rem; /* 30px */
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.text-card-title {
+  font-size: 0.9375rem; /* 15px */
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+
+.text-supporting {
+  font-size: 0.875rem; /* 14px */
+  font-weight: 400;
+  color: var(--color-foreground-muted);
+}
+
+.label-caps {
+  font-size: 0.75rem; /* 12px */
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }

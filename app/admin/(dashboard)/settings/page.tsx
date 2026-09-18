@@ -34,8 +34,8 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-xl font-semibold text-foreground">Settings &amp; audit</h1>
-        <p className="mt-1 text-sm text-foreground-muted">
+        <h1 className="text-page-title">Settings &amp; audit</h1>
+        <p className="mt-1 text-page-subtitle">
           Every recorded action across every campaign, newest first. Audit entries are written by the
           database and can&apos;t be edited or deleted by any role in this product.
         </p>

@@ -21,8 +21,8 @@ export function CardHeader({
   return (
     <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
       <div>
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        {description ? <p className="mt-0.5 text-xs text-foreground-muted">{description}</p> : null}
+        <h2 className="text-card-title">{title}</h2>
+        {description ? <p className="mt-0.5 text-supporting">{description}</p> : null}
       </div>
       {action}
     </div>
@@ -56,7 +56,7 @@ export function StatCard({
     return (
       <Card className="border-navy bg-navy px-5 py-4 text-navy-foreground">
         <p className="label-caps text-white/70">{label}</p>
-        <p className="mt-1.5 text-[25px] font-bold tracking-[-0.035em] tabular-nums text-white">{value}</p>
+        <p className="text-stat-value mt-1.5 tabular-nums text-white">{value}</p>
         {hint ? <p className="mt-1 text-xs text-white/70">{hint}</p> : null}
         {children}
       </Card>
@@ -68,9 +68,7 @@ export function StatCard({
   return (
     <Card className="px-5 py-4">
       <p className="label-caps text-foreground-muted">{label}</p>
-      <p className={cn("mt-1.5 text-[25px] font-bold tracking-[-0.035em] tabular-nums", valueColor)}>
-        {value}
-      </p>
+      <p className={cn("text-stat-value mt-1.5 tabular-nums", valueColor)}>{value}</p>
       {hint ? <p className="mt-1 text-xs text-foreground-subtle">{hint}</p> : null}
       {children}
     </Card>

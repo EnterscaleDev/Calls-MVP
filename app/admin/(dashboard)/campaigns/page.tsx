@@ -41,7 +41,7 @@ export default function CampaignsListPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="label-caps text-foreground-subtle">All clients</p>
-          <h1 className="text-xl font-semibold text-foreground">Campaigns</h1>
+          <h1 className="text-page-title">Campaigns</h1>
         </div>
         <ButtonLink href="/admin/campaigns/new">New campaign</ButtonLink>
       </div>

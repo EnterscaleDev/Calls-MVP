@@ -91,8 +91,8 @@ export default function CreditsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Credits &amp; billing</h1>
-          <p className="mt-1 text-sm text-foreground-muted">
+          <h1 className="text-page-title">Credits &amp; billing</h1>
+          <p className="mt-1 text-page-subtitle">
             Messaging and voice are bought and spent separately — running out of one doesn&apos;t stop the
             other.
           </p>
@@ -115,7 +115,7 @@ export default function CreditsPage() {
         <CardBody className="flex flex-col gap-3">
           {dotgoBalance.status === "ok" ? (
             <div>
-              <p className="text-2xl font-semibold text-foreground">
+              <p className="text-stat-value text-foreground">
                 {dotgoBalance.currency} {dotgoBalance.amount.toLocaleString()}
               </p>
               <p className="mt-1 text-xs text-foreground-muted">
@@ -154,8 +154,8 @@ export default function CreditsPage() {
             <ul className="divide-y divide-border">
               {spendByCampaign.map((row) => (
                 <li key={row.campaignId} className="flex items-center justify-between gap-3 px-5 py-3">
-                  <p className="text-sm font-medium text-foreground">{row.name}</p>
-                  <p className="text-xs text-foreground-muted">
+                  <p className="text-card-title">{row.name}</p>
+                  <p className="text-supporting">
                     {row.sms > 0 ? `SMS ${row.sms.toLocaleString()}` : null}
                     {row.sms > 0 && row.voice > 0 ? " · " : null}
                     {row.voice > 0 ? `Voice ${row.voice.toLocaleString()}` : null}

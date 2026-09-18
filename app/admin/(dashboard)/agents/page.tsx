@@ -96,7 +96,7 @@ export default function AgentsPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="label-caps text-foreground-subtle">Agency team</p>
-          <h1 className="text-xl font-semibold text-foreground">People</h1>
+          <h1 className="text-page-title">People</h1>
         </div>
         <Button onClick={() => setInviteOpen(true)}>Invite someone</Button>
       </div>

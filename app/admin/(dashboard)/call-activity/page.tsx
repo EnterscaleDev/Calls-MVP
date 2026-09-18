@@ -12,8 +12,8 @@ export default function CallActivityPage() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-xl font-semibold text-foreground">Call Activity</h1>
-        <p className="mt-1 text-sm text-foreground-muted">
+        <h1 className="text-page-title">Call Activity</h1>
+        <p className="mt-1 text-page-subtitle">
           Every call attempt across every campaign.
         </p>
       </div>
