@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAdminData } from "@/lib/hooks/useAdminData";
@@ -10,12 +10,17 @@ import { Card, CardHeader, CardBody, StatCard } from "@/components/ui/Card";
 import { CampaignStatusBadge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { ProgressBar } from "@/components/ui/Progress";
 import { formatPercent, isToday } from "../_lib/format";
 import { SMS_TOP_UP_PACKAGES, VOICE_TOP_UP_PACKAGES, type TopUpPackage } from "../_lib/credits";
 import type { AssignmentStatus } from "@/lib/types";
 
 const ACTIVE_ASSIGNMENT_STATUSES: AssignmentStatus[] = ["assigned", "in_progress", "completed"];
+const LOW_VOICE_MINUTES_THRESHOLD = 100;
+
+type DotgoBalanceState =
+  | { status: "idle" | "loading" }
+  | { status: "ok"; currency: string; amount: number }
+  | { status: "error" };
 
 export default function AdminOverviewPage() {
   const [topUpOpen, setTopUpOpen] = useState(false);
@@ -24,8 +29,23 @@ export default function AdminOverviewPage() {
   const [topUpSuccess, setTopUpSuccess] = useState("");
   const [topUpError, setTopUpError] = useState("");
   const [topingUp, setTopingUp] = useState(false);
+  const [dotgoBalance, setDotgoBalance] = useState<DotgoBalanceState>({ status: "idle" });
 
   const { data: db, loading, error, refetch } = useAdminData();
+
+  useEffect(() => {
+    setDotgoBalance({ status: "loading" });
+    fetch("/api/credits/dotgo-balance")
+      .then((r) => r.json())
+      .then((result) => {
+        if (result.ok) {
+          setDotgoBalance({ status: "ok", currency: result.currency, amount: result.amount });
+        } else {
+          setDotgoBalance({ status: "error" });
+        }
+      })
+      .catch(() => setDotgoBalance({ status: "error" }));
+  }, []);
 
   if (loading || !db) return <LoadingScreen label="Loading overview..." />;
   if (error) return <ErrorState title="Couldn't load the overview" description={error} />;
@@ -180,24 +200,35 @@ export default function AdminOverviewPage() {
       <div className="md:max-w-sm">
         <StatCard
           label="SMS & voice credits"
-          value={`${db.orgCredits.sms.toLocaleString()} SMS`}
-          hint={`${db.orgCredits.voiceMinutes.toLocaleString()} voice minutes remaining`}
+          value={
+            dotgoBalance.status === "ok"
+              ? `${dotgoBalance.currency} ${dotgoBalance.amount.toLocaleString()}`
+              : dotgoBalance.status === "loading"
+                ? "Loading…"
+                : dotgoBalance.status === "error"
+                  ? `${db.orgCredits.sms.toLocaleString()} SMS`
+                  : "—"
+          }
+          hint={
+            dotgoBalance.status === "error"
+              ? "Couldn't reach the real SMS balance — showing the internal count instead."
+              : `${db.orgCredits.voiceMinutes.toLocaleString()} voice minutes remaining`
+          }
           tone="hero"
         >
-          <div className="mt-3">
-            <div className="flex items-center justify-between text-xs text-white/70">
-              <span>Monthly allotment used</span>
-              <span>62%</span>
-            </div>
-            <ProgressBar value={0.62} tone="info" className="mt-1.5" />
-          </div>
-          <div className="mt-4 flex gap-2">
+          {db.orgCredits.voiceMinutes < LOW_VOICE_MINUTES_THRESHOLD ? (
+            <p className="mt-2 text-xs font-semibold text-warning">Voice minutes are running low.</p>
+          ) : null}
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
             <Button size="sm" onClick={() => openTopUp("sms")}>
               Top up SMS
             </Button>
             <Button size="sm" variant="secondary" onClick={() => openTopUp("voice")}>
               Top up voice
             </Button>
+            <Link href="/admin/credits" className="text-xs font-semibold text-white/80 hover:text-white hover:underline">
+              View spend & ledger →
+            </Link>
           </div>
         </StatCard>
       </div>
