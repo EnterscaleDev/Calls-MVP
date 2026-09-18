@@ -5,9 +5,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAdminData } from "@/lib/hooks/useAdminData";
 import { Card, CardHeader, CardBody, StatCard } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Form";
-import { InlineBanner, EmptyState, LoadingScreen, ErrorState } from "@/components/ui/States";
+import { EmptyState, LoadingScreen, ErrorState } from "@/components/ui/States";
 import { formatDateTime } from "../_lib/format";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -54,6 +53,8 @@ export default function CreditsPage() {
         }
         setTransactions(data ?? []);
       });
+    fetchDotgoBalance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const campaignName = (id: string | null) => db?.campaigns.find((c) => c.id === id)?.name;
@@ -105,40 +106,29 @@ export default function CreditsPage() {
         </Link>
       </div>
 
-      <StatCard label="Voice credit" value={`${db.orgCredits.voiceMinutes.toLocaleString()} min`} />
-
-      <Card>
-        <CardHeader
-          title="Real Dotgo balance"
-          description="Your actual SMS provider balance, fetched live — not automatically kept in sync with anything else in this app."
+      <div className="grid grid-cols-2 gap-3">
+        <StatCard label="Voice credit" value={`${db.orgCredits.voiceMinutes.toLocaleString()} min`} />
+        <StatCard
+          label="SMS balance"
+          value={
+            dotgoBalance.status === "ok"
+              ? `${dotgoBalance.currency} ${dotgoBalance.amount.toLocaleString()}`
+              : dotgoBalance.status === "loading"
+                ? "Loading…"
+                : dotgoBalance.status === "error"
+                  ? "—"
+                  : "—"
+          }
+          hint={
+            dotgoBalance.status === "ok"
+              ? `${dotgoBalance.accountName} · ${dotgoBalance.mode === "paid" ? "Paid account" : dotgoBalance.mode}`
+              : dotgoBalance.status === "error"
+                ? dotgoBalance.errorReason
+                : "Real Dotgo balance — not kept in sync automatically"
+          }
+          tone={dotgoBalance.status === "error" ? "danger" : "default"}
         />
-        <CardBody className="flex flex-col gap-3">
-          {dotgoBalance.status === "ok" ? (
-            <div>
-              <p className="text-stat-value text-foreground">
-                {dotgoBalance.currency} {dotgoBalance.amount.toLocaleString()}
-              </p>
-              <p className="mt-1 text-xs text-foreground-muted">
-                {dotgoBalance.accountName} · {dotgoBalance.mode === "paid" ? "Paid account" : dotgoBalance.mode}
-              </p>
-            </div>
-          ) : dotgoBalance.status === "error" ? (
-            <InlineBanner kind="danger">{dotgoBalance.errorReason}</InlineBanner>
-          ) : (
-            <p className="text-sm text-foreground-muted">Not fetched yet.</p>
-          )}
-          <div>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={fetchDotgoBalance}
-              disabled={dotgoBalance.status === "loading"}
-            >
-              {dotgoBalance.status === "loading" ? "Fetching..." : "Fetch real balance"}
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
+      </div>
 
       <Card>
         <CardHeader
