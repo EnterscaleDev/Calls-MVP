@@ -93,9 +93,7 @@ export function AdminShell({
       <div className="flex min-h-screen flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:px-6">
           <div className="md:hidden text-sm font-semibold">Calls Ops</div>
-          <div className="hidden text-sm font-medium text-foreground-muted md:block">
-            Hexia Health · Northwind Insurance · Bexley Retail Group
-          </div>
+          <div />
           <div className="flex items-center gap-2">
             {credits ? (
               <>
