@@ -8,23 +8,20 @@ import { getAuditLog } from "@/lib/selectors";
 import { SENSITIVE_ACTIONS, ACCESS_ACTIONS, describeAction } from "@/lib/audit-labels";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Field, Select, Input } from "@/components/ui/Form";
+import { Field, Select } from "@/components/ui/Form";
 import { CampaignStatusBadge, Badge } from "@/components/ui/Badge";
 import { EmptyState, LoadingScreen, ErrorState, InlineBanner } from "@/components/ui/States";
-import { Modal } from "@/components/ui/Modal";
 import { formatDateTime } from "../../../_lib/format";
 import { useCampaignDetail } from "../campaign-context";
-import type { CampaignStatus } from "@/lib/types";
+import { DeleteCampaignModal } from "../../_components/DeleteCampaignModal";
+import type { Campaign, CampaignStatus } from "@/lib/types";
 
 export default function CampaignSettingsPage() {
   const router = useRouter();
   const campaign = useCampaignDetail();
   const { data: db, loading, error, refetch } = useAdminData();
   const [busy, setBusy] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Campaign | null>(null);
   const [statusError, setStatusError] = useState("");
 
   if (loading || !db) return <LoadingScreen label="Loading settings..." />;
@@ -96,39 +93,6 @@ export default function CampaignSettingsPage() {
     });
     setBusy(false);
     await refetch();
-  }
-
-  async function handleDeleteCampaign() {
-    setDeleting(true);
-    setDeleteError("");
-    try {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      const { data: profileRow } = user
-        ? await supabase.from("profiles").select("display_name").eq("id", user.id).maybeSingle()
-        : { data: null };
-      // Logged before the delete since every other row referencing this
-      // campaign (including audit_events.campaign_id) cascades/nulls once
-      // the campaign itself is gone — the name in metadata is what survives.
-      await supabase.from("audit_events").insert({
-        organisation_id: campaign.organisationId,
-        campaign_id: campaign.id,
-        actor_type: "admin",
-        actor_name: profileRow?.display_name ?? "Admin",
-        action: "campaign_deleted",
-        entity_type: "campaign",
-        entity_id: campaign.id,
-        metadata: { name: campaign.name },
-      });
-      const { error: deleteErr } = await supabase.from("campaigns").delete().eq("id", campaign.id);
-      if (deleteErr) throw deleteErr;
-      router.push("/admin/campaigns");
-    } catch {
-      setDeleteError("Something went wrong deleting this campaign. Try again.");
-      setDeleting(false);
-    }
   }
 
   const statusActions: { label: string; onClick: () => void; variant?: "secondary" | "danger" }[] = (() => {
@@ -244,54 +208,29 @@ export default function CampaignSettingsPage() {
         </CardBody>
       </Card>
 
-      <Card>
-        <CardHeader
-          title="Danger zone"
-          description="Permanently deletes this campaign and everything under it — contacts' import records, invitations, bookings, call history, and recordings. This can't be undone."
-        />
-        <CardBody>
-          <Button variant="danger" onClick={() => setDeleteOpen(true)}>
-            Delete campaign
-          </Button>
-        </CardBody>
-      </Card>
+      {liveCampaign.status !== "archived" ? (
+        <Card>
+          <CardHeader
+            title="Danger zone"
+            description="Deleting only works for campaigns with no real activity yet — no calls, consent, bookings, sent invitations or recordings. If this campaign has any of that, Archive it instead; deletion is blocked and offers Archive automatically."
+          />
+          <CardBody>
+            <Button variant="danger" onClick={() => setDeleteTarget(liveCampaign)}>
+              Delete campaign
+            </Button>
+          </CardBody>
+        </Card>
+      ) : null}
 
-      <Modal
-        open={deleteOpen}
-        onClose={() => {
-          if (deleting) return;
-          setDeleteOpen(false);
-          setDeleteConfirmText("");
+      <DeleteCampaignModal
+        campaign={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={() => {
+          setDeleteTarget(null);
+          router.push("/admin/campaigns");
         }}
-        title="Delete this campaign?"
-        description={`This permanently deletes "${liveCampaign.name}" and all of its participants, invitations, bookings, and call history. This can't be undone.`}
-      >
-        <div className="flex flex-col gap-3">
-          {deleteError ? <InlineBanner kind="danger">{deleteError}</InlineBanner> : null}
-          <Field label={`Type the campaign name to confirm: "${liveCampaign.name}"`}>
-            <Input value={deleteConfirmText} onChange={(e) => setDeleteConfirmText(e.target.value)} />
-          </Field>
-          <div className="flex justify-end gap-3">
-            <Button
-              variant="secondary"
-              disabled={deleting}
-              onClick={() => {
-                setDeleteOpen(false);
-                setDeleteConfirmText("");
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              disabled={deleting || deleteConfirmText !== liveCampaign.name}
-              onClick={handleDeleteCampaign}
-            >
-              {deleting ? "Deleting..." : "Delete campaign"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        onArchiveInstead={() => setStatus("archived")}
+      />
     </div>
   );
 }

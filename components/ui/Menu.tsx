@@ -11,6 +11,8 @@ export interface MenuAction {
   onSelect: () => void;
   variant?: "default" | "danger";
   disabled?: boolean;
+  /** Renders a divider immediately above this item, to separate action groups (e.g. lifecycle actions from Delete). */
+  dividerBefore?: boolean;
 }
 
 /**
@@ -81,28 +83,30 @@ export function OverflowMenu({ actions, ariaLabel = "Actions" }: { actions: Menu
           className="z-50 min-w-[210px] overflow-hidden rounded-[6px] border border-border bg-surface py-1 shadow-lg"
         >
           {actions.map((action) => (
-            <button
-              key={action.key}
-              type="button"
-              role="menuitem"
-              disabled={action.disabled}
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpen(false);
-                action.onSelect();
-              }}
-              className={cn(
-                "flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition-colors",
-                action.disabled
-                  ? "cursor-not-allowed text-foreground-subtle"
-                  : action.variant === "danger"
-                    ? "text-danger hover:bg-danger-soft"
-                    : "text-foreground hover:bg-surface-muted"
-              )}
-            >
-              <span>{action.label}</span>
-              {action.hint ? <span className="text-xs font-normal text-foreground-subtle">{action.hint}</span> : null}
-            </button>
+            <div key={action.key}>
+              {action.dividerBefore ? <div role="separator" className="my-1 h-px bg-border" /> : null}
+              <button
+                type="button"
+                role="menuitem"
+                disabled={action.disabled}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpen(false);
+                  action.onSelect();
+                }}
+                className={cn(
+                  "flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition-colors",
+                  action.disabled
+                    ? "cursor-not-allowed text-foreground-subtle"
+                    : action.variant === "danger"
+                      ? "text-danger hover:bg-danger-soft"
+                      : "text-foreground hover:bg-surface-muted"
+                )}
+              >
+                <span>{action.label}</span>
+                {action.hint ? <span className="text-xs font-normal text-foreground-subtle">{action.hint}</span> : null}
+              </button>
+            </div>
           ))}
         </div>
       ) : null}

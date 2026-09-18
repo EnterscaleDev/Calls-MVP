@@ -509,6 +509,8 @@ export type Database = {
           created_by_name: string
           created_by_user_id: string | null
           daily_agent_target: number
+          deleted_at: string | null
+          deleted_by: string | null
           description: string
           end_date: string
           estimated_duration_minutes: number
@@ -536,6 +538,8 @@ export type Database = {
           created_by_name: string
           created_by_user_id?: string | null
           daily_agent_target: number
+          deleted_at?: string | null
+          deleted_by?: string | null
           description?: string
           end_date: string
           estimated_duration_minutes: number
@@ -563,6 +567,8 @@ export type Database = {
           created_by_name?: string
           created_by_user_id?: string | null
           daily_agent_target?: number
+          deleted_at?: string | null
+          deleted_by?: string | null
           description?: string
           end_date?: string
           estimated_duration_minutes?: number
@@ -986,6 +992,10 @@ export type Database = {
         }
         Returns: string
       }
+      admin_campaign_delete_eligibility: {
+        Args: { p_campaign_id: string }
+        Returns: { eligible: boolean; reason: string }[]
+      }
       admin_check_duplicate_phones: {
         Args: { p_campaign_id: string; p_phones: string[] }
         Returns: string[]
@@ -1008,6 +1018,10 @@ export type Database = {
           p_target_completions: number
         }
         Returns: string
+      }
+      admin_delete_campaign: {
+        Args: { p_campaign_id: string }
+        Returns: undefined
       }
       admin_detach_agent_from_campaign: {
         Args: { p_campaign_agent_id: string }
@@ -1139,6 +1153,10 @@ export type Database = {
           p_token: string
         }
         Returns: string
+      }
+      fn_campaign_has_activity: {
+        Args: { p_campaign_id: string }
+        Returns: boolean
       }
       fn_current_agent_id: { Args: never; Returns: string }
       fn_is_admin: { Args: never; Returns: boolean }

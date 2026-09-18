@@ -15,6 +15,7 @@ import { Modal } from "@/components/ui/Modal";
 import { OverflowMenu, type MenuAction } from "@/components/ui/Menu";
 import { ProgressBar } from "@/components/ui/Progress";
 import { formatDate, formatPercent } from "../_lib/format";
+import { DeleteCampaignModal } from "./_components/DeleteCampaignModal";
 import type { Campaign, CampaignStatus } from "@/lib/types";
 
 interface ActionError {
@@ -39,6 +40,7 @@ export default function CampaignsListPage() {
   const [toast, setToast] = useState<Toast | null>(null);
   const [completeTarget, setCompleteTarget] = useState<Campaign | null>(null);
   const [completing, setCompleting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Campaign | null>(null);
 
   if (loading || !db) return <LoadingScreen label="Loading campaigns..." />;
   if (error) return <ErrorState title="Couldn't load campaigns" description={error} />;
@@ -156,19 +158,19 @@ export default function CampaignsListPage() {
 
   function actionsFor(campaign: Campaign): MenuAction[] {
     const busy = pendingId === campaign.id;
-    const actions: MenuAction[] = [
+    const status = campaign.status;
+
+    // Group 1: always-available, non-destructive navigation.
+    const primary: MenuAction[] = [
       { key: "view", label: "View campaign", onSelect: () => router.push(`/admin/campaigns/${campaign.id}`) },
     ];
-
-    if (campaign.status !== "archived") {
-      actions.push({
-        key: "edit",
-        label: "Edit campaign",
-        onSelect: () => router.push(`/admin/campaigns/${campaign.id}/edit`),
-      });
+    // Edit isn't offered once a campaign is Completed or Archived — those
+    // are closed-out states; config changes belong to campaigns still being
+    // set up or run.
+    if (status === "draft" || status === "ready" || status === "active" || status === "paused") {
+      primary.push({ key: "edit", label: "Edit campaign", onSelect: () => router.push(`/admin/campaigns/${campaign.id}/edit`) });
     }
-
-    actions.push({
+    primary.push({
       key: "duplicate",
       label: "Duplicate",
       hint: "Creates a new Draft — no contacts or history copied",
@@ -176,66 +178,59 @@ export default function CampaignsListPage() {
       onSelect: () => handleDuplicate(campaign),
     });
 
-    if (campaign.status === "draft" || campaign.status === "ready") {
-      actions.push({
-        key: "activate",
-        label: "Activate campaign",
-        disabled: busy,
-        onSelect: () => handleActivate(campaign),
-      });
+    // Group 2: lifecycle transitions.
+    const lifecycle: MenuAction[] = [];
+    if (status === "draft" || status === "ready") {
+      lifecycle.push({ key: "activate", label: "Activate campaign", disabled: busy, onSelect: () => handleActivate(campaign) });
     }
-
-    if (campaign.status === "active") {
-      actions.push({
+    if (status === "active") {
+      lifecycle.push({
         key: "pause",
         label: "Pause campaign",
         disabled: busy,
         onSelect: () => handleSetStatus(campaign, "paused", "Campaign paused."),
       });
-      actions.push({ key: "complete", label: "Mark as completed", disabled: busy, onSelect: () => setCompleteTarget(campaign) });
-      actions.push({
-        key: "archive",
-        label: "Archive campaign",
-        disabled: busy,
-        onSelect: () => handleSetStatus(campaign, "archived", "Campaign archived."),
-      });
+      lifecycle.push({ key: "complete", label: "Mark as completed", disabled: busy, onSelect: () => setCompleteTarget(campaign) });
     }
-
-    if (campaign.status === "paused") {
-      actions.push({
+    if (status === "paused") {
+      lifecycle.push({
         key: "resume",
         label: "Resume campaign",
         disabled: busy,
         onSelect: () => handleSetStatus(campaign, "active", "Campaign resumed."),
       });
-      actions.push({ key: "complete", label: "Mark as completed", disabled: busy, onSelect: () => setCompleteTarget(campaign) });
-      actions.push({
+      lifecycle.push({ key: "complete", label: "Mark as completed", disabled: busy, onSelect: () => setCompleteTarget(campaign) });
+    }
+    if (status !== "archived") {
+      lifecycle.push({
         key: "archive",
         label: "Archive campaign",
         disabled: busy,
         onSelect: () => handleSetStatus(campaign, "archived", "Campaign archived."),
       });
     }
-
-    if (campaign.status === "completed") {
-      actions.push({
-        key: "archive",
-        label: "Archive campaign",
-        disabled: busy,
-        onSelect: () => handleSetStatus(campaign, "archived", "Campaign archived."),
-      });
+    if (status === "archived") {
+      lifecycle.push({ key: "restore", label: "Restore campaign", disabled: busy, onSelect: () => handleRestore(campaign) });
     }
+    if (lifecycle.length > 0) lifecycle[0].dividerBefore = true;
 
-    if (campaign.status === "archived") {
-      actions.push({
-        key: "restore",
-        label: "Restore campaign",
-        disabled: busy,
-        onSelect: () => handleRestore(campaign),
-      });
-    }
+    // Group 3: destructive, always last, visually separated. Not offered
+    // for Archived — once archived, Restore/Duplicate/View is the full set.
+    const destructive: MenuAction[] =
+      status === "archived"
+        ? []
+        : [
+            {
+              key: "delete",
+              label: "Delete campaign",
+              variant: "danger",
+              dividerBefore: true,
+              disabled: busy,
+              onSelect: () => setDeleteTarget(campaign),
+            },
+          ];
 
-    return actions;
+    return [...primary, ...lifecycle, ...destructive];
   }
 
   return (
@@ -404,6 +399,17 @@ export default function CampaignsListPage() {
           </Button>
         </div>
       </Modal>
+
+      <DeleteCampaignModal
+        campaign={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={() => {
+          setDeleteTarget(null);
+          refetch();
+          showToast({ message: "Campaign deleted." });
+        }}
+        onArchiveInstead={(c) => handleSetStatus(c, "archived", "Campaign archived.")}
+      />
 
       {toast ? (
         <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-[6px] border border-success/20 bg-success-soft px-4 py-3 text-sm text-success shadow-lg">
