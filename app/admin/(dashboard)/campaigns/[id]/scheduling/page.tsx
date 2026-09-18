@@ -14,15 +14,21 @@ import { useCampaignDetail } from "../campaign-context";
 import { cn } from "@/lib/cn";
 import type { AgentProfile, InterviewBooking, CallAssignment } from "@/lib/types";
 
-type Bucket = "unassigned" | "today" | "upcoming" | "overdue" | "completed";
+type Bucket = "unscheduled" | "unassigned" | "today" | "upcoming" | "overdue" | "completed" | "cancelled";
 
 const BUCKET_COLUMNS: { key: Bucket; label: string; description: string; dot: string }[] = [
+  { key: "unscheduled", label: "Unscheduled", description: "Opted in, no slot chosen", dot: "bg-warning" },
   { key: "unassigned", label: "Unassigned", description: "Booked, no agent yet", dot: "bg-warning" },
   { key: "today", label: "Today", description: "Interview is today", dot: "bg-info" },
   { key: "upcoming", label: "Upcoming", description: "Booked for a future date", dot: "bg-navy" },
   { key: "overdue", label: "Overdue", description: "Slot passed, not completed", dot: "bg-danger" },
   { key: "completed", label: "Completed", description: "Interview done", dot: "bg-success" },
+  { key: "cancelled", label: "Cancelled", description: "Opted out or cancelled", dot: "bg-foreground-subtle" },
 ];
+
+/** Buckets with no meaningful assign-agent action — either nothing to
+ *  assign against yet (no booking), or the record is settled. */
+const NO_ASSIGN_BUCKETS = new Set<Bucket>(["unscheduled", "completed", "cancelled"]);
 
 function initials(name: string): string {
   return name
@@ -36,7 +42,7 @@ function initials(name: string): string {
 interface SchedulingRow {
   participantId: string;
   contactName: string;
-  booking: InterviewBooking;
+  booking?: InterviewBooking;
   assignment?: CallAssignment;
   agent?: AgentProfile;
   bucket: Bucket;
@@ -66,12 +72,26 @@ function SchedulingPageInner() {
     const result: SchedulingRow[] = [];
 
     for (const participant of participants) {
-      const booking = [...db.bookings]
-        .filter((b) => b.participantId === participant.id && b.status !== "cancelled")
-        .sort((a, b) => b.scheduledStart.localeCompare(a.scheduledStart))[0];
-      if (!booking) continue;
-
       const contact = db.contacts.find((c) => c.id === participant.contactId);
+      const contactName = contact?.name ?? "Unknown contact";
+      const bookingsForParticipant = [...db.bookings]
+        .filter((b) => b.participantId === participant.id)
+        .sort((a, b) => b.scheduledStart.localeCompare(a.scheduledStart));
+      const booking = bookingsForParticipant.find((b) => b.status !== "cancelled");
+
+      if (!booking) {
+        // No current booking — either they cancelled/were cancelled (show
+        // the most recent one so there's still something to look at) or
+        // they've opted in but haven't picked a slot yet.
+        const mostRecentCancelled = bookingsForParticipant.find((b) => b.status === "cancelled");
+        if (mostRecentCancelled) {
+          result.push({ participantId: participant.id, contactName, booking: mostRecentCancelled, bucket: "cancelled" });
+        } else if (participant.participationStatus === "opted_in") {
+          result.push({ participantId: participant.id, contactName, bucket: "unscheduled" });
+        }
+        continue;
+      }
+
       const assignment = db.assignments.find((a) => a.bookingId === booking.id);
       const agent = assignment ? db.agents.find((a) => a.id === assignment.agentId) : undefined;
 
@@ -89,17 +109,10 @@ function SchedulingPageInner() {
         else bucket = "upcoming";
       }
 
-      result.push({
-        participantId: participant.id,
-        contactName: contact?.name ?? "Unknown contact",
-        booking,
-        assignment,
-        agent,
-        bucket,
-      });
+      result.push({ participantId: participant.id, contactName, booking, assignment, agent, bucket });
     }
 
-    return result.sort((a, b) => a.booking.scheduledStart.localeCompare(b.booking.scheduledStart));
+    return result.sort((a, b) => (a.booking?.scheduledStart ?? "").localeCompare(b.booking?.scheduledStart ?? ""));
   }, [db, campaign.id]);
 
   const campaignAgentIds = db
@@ -236,9 +249,11 @@ function SchedulingPageInner() {
                           ) : null}
                         </div>
                         <p className="mt-1 text-xs text-foreground-muted">
-                          {formatDate(row.booking.scheduledStart)} · {formatTime(row.booking.scheduledStart)}
+                          {row.booking
+                            ? `${formatDate(row.booking.scheduledStart)} · ${formatTime(row.booking.scheduledStart)}`
+                            : "No slot chosen yet"}
                         </p>
-                        {col.key !== "completed" ? (
+                        {!NO_ASSIGN_BUCKETS.has(col.key) ? (
                           <div className="mt-2">
                             <AssignControl row={row} compact />
                           </div>
@@ -292,7 +307,7 @@ function SchedulingPageInner() {
                         <th className="px-5 py-3 font-medium">Status</th>
                         <th className="px-5 py-3 font-medium">Assigned agent</th>
                         <th className="px-5 py-3 font-medium">Assignment status</th>
-                        {activeBucket !== "completed" ? (
+                        {!NO_ASSIGN_BUCKETS.has(activeBucket) ? (
                           <th className="px-5 py-3 font-medium">Action</th>
                         ) : null}
                       </tr>
@@ -302,9 +317,9 @@ function SchedulingPageInner() {
                         <tr key={row.participantId} className="border-b border-border last:border-0">
                           <td className="px-5 py-3 font-medium text-foreground">{row.contactName}</td>
                           <td className="px-5 py-3 tabular-nums text-foreground-muted">
-                            {formatDateTime(row.booking.scheduledStart)}
+                            {row.booking ? formatDateTime(row.booking.scheduledStart) : "—"}
                           </td>
-                          <td className="px-5 py-3 text-foreground-muted">{row.booking.status}</td>
+                          <td className="px-5 py-3 text-foreground-muted">{row.booking?.status ?? "—"}</td>
                           <td className="px-5 py-3 text-foreground-muted">{row.agent?.name ?? "—"}</td>
                           <td className="px-5 py-3">
                             {row.assignment ? (
@@ -313,7 +328,7 @@ function SchedulingPageInner() {
                               <span className="text-foreground-subtle">—</span>
                             )}
                           </td>
-                          {activeBucket !== "completed" ? (
+                          {!NO_ASSIGN_BUCKETS.has(activeBucket) ? (
                             <td className="px-5 py-3">
                               <AssignControl row={row} />
                             </td>
