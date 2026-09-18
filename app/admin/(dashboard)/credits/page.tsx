@@ -105,15 +105,12 @@ export default function CreditsPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard label="SMS credit" value={db.orgCredits.sms.toLocaleString()} />
-        <StatCard label="Voice credit" value={`${db.orgCredits.voiceMinutes.toLocaleString()} min`} />
-      </div>
+      <StatCard label="Voice credit" value={`${db.orgCredits.voiceMinutes.toLocaleString()} min`} />
 
       <Card>
         <CardHeader
           title="Real Dotgo balance"
-          description="Your actual SMS provider balance — a separate number from the internal SMS credit above, not automatically kept in sync."
+          description="Your actual SMS provider balance, fetched live — not automatically kept in sync with anything else in this app."
         />
         <CardBody className="flex flex-col gap-3">
           {dotgoBalance.status === "ok" ? (
