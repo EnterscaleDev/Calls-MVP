@@ -246,6 +246,17 @@ export default function AudiencePage() {
     URL.revokeObjectURL(url);
   }
 
+  // Pause-campaign rule: no new participant registrations once a campaign
+  // has stopped running — draft/ready/active can still take imports, since
+  // nothing operational has necessarily started or is still in progress.
+  // The server-side admin_import_contact RPC enforces this too; this is
+  // just the friendlier upfront version of the same rule.
+  const importBlocked = ["paused", "completed", "archived"].includes(campaign.status);
+  const importBlockedReason =
+    campaign.status === "paused"
+      ? "This campaign is paused — resume it before importing new contacts."
+      : "This campaign isn't running — new contacts can't be imported.";
+
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -256,14 +267,16 @@ export default function AudiencePage() {
         <CardBody className="flex flex-col gap-4">
           {successMessage ? <InlineBanner kind="success">{successMessage}</InlineBanner> : null}
           {parseError ? <InlineBanner kind="danger">{parseError}</InlineBanner> : null}
+          {importBlocked ? <InlineBanner kind="warning">{importBlockedReason}</InlineBanner> : null}
 
           <div className="flex flex-wrap items-center gap-3">
             <input
               ref={fileInputRef}
               type="file"
               accept=".csv"
+              disabled={importBlocked}
               onChange={handleFileChange}
-              className="text-sm text-foreground-muted file:mr-3 file:rounded-[5px] file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground hover:file:bg-surface-muted"
+              className="text-sm text-foreground-muted file:mr-3 file:rounded-[5px] file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-foreground hover:file:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-50"
             />
             <button
               type="button"

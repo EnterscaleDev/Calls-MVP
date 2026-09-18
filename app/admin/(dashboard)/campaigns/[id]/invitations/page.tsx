@@ -92,6 +92,19 @@ export default function InvitationsPage() {
   const estimatedCost = eligibleCount * segments * SMS_CREDIT_COST_PER_SEGMENT;
   const creditAfterSend = db.orgCredits.sms - estimatedCost;
 
+  // Pause-campaign rule: no new bulk sends while the campaign isn't active
+  // (draft/ready haven't launched yet, paused/completed/archived have
+  // stopped) — this is a client-side gate only, matching how the credit
+  // pre-flight check below is also enforced client-side rather than in a
+  // dedicated send-batch RPC.
+  const sendsBlocked = campaign.status !== "active";
+  const sendsBlockedReason =
+    campaign.status === "paused"
+      ? "This campaign is paused — resume it before sending new invitations."
+      : campaign.status === "draft" || campaign.status === "ready"
+        ? "Activate this campaign before sending invitations."
+        : "This campaign isn't active — new invitations can't be sent.";
+
   function handleSaveDraft() {
     // No real draft storage exists yet (matches the mock, which never
     // persisted this either) — purely a local acknowledgment.
@@ -106,6 +119,10 @@ export default function InvitationsPage() {
 
   async function handleConfirmSend() {
     if (!db) return;
+    if (sendsBlocked) {
+      setSendError(sendsBlockedReason);
+      return;
+    }
     setSending(true);
     setSendError("");
     try {
@@ -293,6 +310,7 @@ export default function InvitationsPage() {
               {failedParticipants.length > 0 ? (
                 <Button
                   variant="secondary"
+                  disabled={sendsBlocked}
                   onClick={() => {
                     setSendMode("failed");
                     setConfirmOpen(true);
@@ -306,12 +324,14 @@ export default function InvitationsPage() {
                   setSendMode("new");
                   setConfirmOpen(true);
                 }}
-                disabled={eligibleCount === 0}
+                disabled={eligibleCount === 0 || sendsBlocked}
               >
                 Send Campaign
               </Button>
             </div>
-            {eligibleCount === 0 ? (
+            {sendsBlocked ? (
+              <p className="text-right text-xs text-warning">{sendsBlockedReason}</p>
+            ) : eligibleCount === 0 ? (
               <p className="text-right text-xs text-foreground-subtle">
                 No participants are currently eligible to be invited (import contacts on the Audience tab first).
               </p>

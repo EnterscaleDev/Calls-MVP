@@ -502,6 +502,7 @@ export type Database = {
       }
       campaigns: {
         Row: {
+          archived_at: string | null
           campaign_type: string
           client_name: string
           created_at: string
@@ -521,10 +522,14 @@ export type Database = {
           sender_id: string
           start_date: string
           status: Database["public"]["Enums"]["campaign_status_enum"]
+          status_before_archive:
+            | Database["public"]["Enums"]["campaign_status_enum"]
+            | null
           target_completions: number
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           campaign_type?: string
           client_name: string
           created_at?: string
@@ -544,10 +549,14 @@ export type Database = {
           sender_id: string
           start_date: string
           status?: Database["public"]["Enums"]["campaign_status_enum"]
+          status_before_archive?:
+            | Database["public"]["Enums"]["campaign_status_enum"]
+            | null
           target_completions: number
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           campaign_type?: string
           client_name?: string
           created_at?: string
@@ -567,6 +576,9 @@ export type Database = {
           sender_id?: string
           start_date?: string
           status?: Database["public"]["Enums"]["campaign_status_enum"]
+          status_before_archive?:
+            | Database["public"]["Enums"]["campaign_status_enum"]
+            | null
           target_completions?: number
           updated_at?: string
         }
@@ -954,6 +966,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_activate_campaign: {
+        Args: { p_campaign_id: string }
+        Returns: undefined
+      }
       admin_assign_participant: {
         Args: {
           p_agent_id: string
@@ -997,6 +1013,10 @@ export type Database = {
         Args: { p_campaign_agent_id: string }
         Returns: undefined
       }
+      admin_duplicate_campaign: {
+        Args: { p_campaign_id: string }
+        Returns: string
+      }
       admin_import_contact: {
         Args: {
           p_campaign_id: string
@@ -1017,6 +1037,28 @@ export type Database = {
           p_phone?: string
         }
         Returns: string
+      }
+      admin_restore_campaign: {
+        Args: { p_campaign_id: string }
+        Returns: undefined
+      }
+      admin_update_campaign_details: {
+        Args: {
+          p_campaign_id: string
+          p_client_name: string
+          p_daily_agent_target: number
+          p_description: string
+          p_end_date: string
+          p_estimated_duration_minutes: number
+          p_incentive_description: string
+          p_incentive_title: string
+          p_name: string
+          p_research_objective: string
+          p_sender_id: string
+          p_start_date: string
+          p_target_completions: number
+        }
+        Returns: undefined
       }
       admin_update_campaign_recording: {
         Args: { p_campaign_id: string; p_recording_enabled: boolean }

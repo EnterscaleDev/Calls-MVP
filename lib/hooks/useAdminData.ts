@@ -57,6 +57,8 @@ function mapCampaign(row: CampaignRow): Campaign {
     createdBy: row.created_by_name,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    archivedAt: row.archived_at ?? undefined,
+    statusBeforeArchive: row.status_before_archive ?? undefined,
   };
 }
 

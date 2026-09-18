@@ -32,6 +32,8 @@ export interface Campaign {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string;
+  statusBeforeArchive?: CampaignStatus;
 }
 
 export interface Contact {

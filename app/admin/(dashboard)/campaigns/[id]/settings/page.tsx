@@ -25,6 +25,7 @@ export default function CampaignSettingsPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [statusError, setStatusError] = useState("");
 
   if (loading || !db) return <LoadingScreen label="Loading settings..." />;
   if (error) return <ErrorState title="Couldn't load settings" description={error} />;
@@ -38,9 +39,51 @@ export default function CampaignSettingsPage() {
 
   async function setStatus(status: CampaignStatus) {
     setBusy(true);
+    setStatusError("");
     const supabase = createClient();
-    await supabase.rpc("admin_update_campaign_status", { p_campaign_id: campaign.id, p_status: status });
+    const { error: rpcError } = await supabase.rpc("admin_update_campaign_status", {
+      p_campaign_id: campaign.id,
+      p_status: status,
+    });
     setBusy(false);
+    if (rpcError) {
+      setStatusError(rpcError.message);
+      return;
+    }
+    await refetch();
+  }
+
+  // Activate is the one transition with real minimum-requirements
+  // validation (name, client, dates, target, an approved sender ID) — it
+  // goes through its own RPC rather than the generic status update so that
+  // validation applies here and wherever else "Activate" is offered.
+  async function activateCampaign() {
+    setBusy(true);
+    setStatusError("");
+    const supabase = createClient();
+    const { error: rpcError } = await supabase.rpc("admin_activate_campaign", {
+      p_campaign_id: campaign.id,
+    });
+    setBusy(false);
+    if (rpcError) {
+      setStatusError(rpcError.message);
+      return;
+    }
+    await refetch();
+  }
+
+  async function restoreCampaign() {
+    setBusy(true);
+    setStatusError("");
+    const supabase = createClient();
+    const { error: rpcError } = await supabase.rpc("admin_restore_campaign", {
+      p_campaign_id: campaign.id,
+    });
+    setBusy(false);
+    if (rpcError) {
+      setStatusError(rpcError.message);
+      return;
+    }
     await refetch();
   }
 
@@ -88,23 +131,27 @@ export default function CampaignSettingsPage() {
     }
   }
 
-  const statusActions: { label: string; status: CampaignStatus; variant?: "secondary" | "danger" }[] = (() => {
+  const statusActions: { label: string; onClick: () => void; variant?: "secondary" | "danger" }[] = (() => {
     switch (liveCampaign.status) {
       case "draft":
       case "ready":
-        return [{ label: "Activate", status: "active" }];
+        return [{ label: "Activate", onClick: activateCampaign }];
       case "active":
         return [
-          { label: "Pause campaign", status: "paused", variant: "secondary" },
-          { label: "Close as completed", status: "completed", variant: "secondary" },
+          { label: "Pause campaign", onClick: () => setStatus("paused"), variant: "secondary" },
+          { label: "Close as completed", onClick: () => setStatus("completed"), variant: "secondary" },
+          { label: "Archive", onClick: () => setStatus("archived"), variant: "secondary" },
         ];
       case "paused":
         return [
-          { label: "Resume", status: "active" },
-          { label: "Close as completed", status: "completed", variant: "secondary" },
+          { label: "Resume", onClick: () => setStatus("active") },
+          { label: "Close as completed", onClick: () => setStatus("completed"), variant: "secondary" },
+          { label: "Archive", onClick: () => setStatus("archived"), variant: "secondary" },
         ];
       case "completed":
-        return [{ label: "Archive", status: "archived", variant: "secondary" }];
+        return [{ label: "Archive", onClick: () => setStatus("archived"), variant: "secondary" }];
+      case "archived":
+        return [{ label: "Restore campaign", onClick: restoreCampaign }];
       default:
         return [];
     }
@@ -114,25 +161,35 @@ export default function CampaignSettingsPage() {
     <div className="flex flex-col gap-5">
       <Card>
         <CardHeader title="Status" />
-        <CardBody className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <CampaignStatusBadge status={liveCampaign.status} />
-            <p className="mt-1.5 text-xs text-foreground-muted">
-              Since {formatDateTime(liveCampaign.updatedAt)}
-            </p>
+        <CardBody className="flex flex-col gap-4">
+          {statusError ? <InlineBanner kind="danger">{statusError}</InlineBanner> : null}
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <CampaignStatusBadge status={liveCampaign.status} />
+              <p className="mt-1.5 text-xs text-foreground-muted">
+                Since {formatDateTime(liveCampaign.updatedAt)}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {statusActions.map((action) => (
+                <Button
+                  key={action.label}
+                  variant={action.variant ?? "primary"}
+                  disabled={busy}
+                  onClick={action.onClick}
+                >
+                  {action.label}
+                </Button>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {statusActions.map((action) => (
-              <Button
-                key={action.status}
-                variant={action.variant ?? "primary"}
-                disabled={busy}
-                onClick={() => setStatus(action.status)}
-              >
-                {action.label}
-              </Button>
-            ))}
-          </div>
+          {liveCampaign.status === "paused" ? (
+            <InlineBanner kind="info">
+              Pausing stops new activity only — no new SMS sends or contact imports. Interviews already
+              booked, and any that are scheduled while paused, are not cancelled and agents can still see
+              and complete them.
+            </InlineBanner>
+          ) : null}
         </CardBody>
       </Card>
 
