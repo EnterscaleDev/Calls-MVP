@@ -13,6 +13,9 @@ const AGENT_LOGIN = "/agent/login";
  * comment on why it can't write cookies itself), then gates /admin/** and
  * /agent/** by session + role. Role isn't in the JWT, so this costs one
  * `profiles` PK lookup per protected request — cheap at this app's scale.
+ * For agent routes this also joins agent_profiles.status: deactivating an
+ * Agent must actually block them at the next request, not just hide the
+ * nav — a still-valid session alone can't be trusted here.
  */
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -56,17 +59,18 @@ export async function updateSession(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, agent_profiles(status)")
     .eq("id", user.id)
     .single();
 
   const wrongRole =
     (isAdminRoute && profile?.role !== "admin") || (isAgentRoute && profile?.role !== "agent");
+  const agentDeactivated = isAgentRoute && profile?.role === "agent" && profile.agent_profiles?.status !== "active";
 
-  if (!profile || wrongRole) {
+  if (!profile || wrongRole || agentDeactivated) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = isAdminRoute ? ADMIN_LOGIN : AGENT_LOGIN;
-    loginUrl.searchParams.set("error", "wrong_role");
+    loginUrl.searchParams.set("error", agentDeactivated ? "deactivated" : "wrong_role");
     return NextResponse.redirect(loginUrl);
   }
 

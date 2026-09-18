@@ -358,6 +358,8 @@ export type Database = {
           created_at: string
           daily_target: number
           id: string
+          removed_at: string | null
+          removed_by: string | null
         }
         Insert: {
           active?: boolean
@@ -366,6 +368,8 @@ export type Database = {
           created_at?: string
           daily_target: number
           id?: string
+          removed_at?: string | null
+          removed_by?: string | null
         }
         Update: {
           active?: boolean
@@ -374,6 +378,8 @@ export type Database = {
           created_at?: string
           daily_target?: number
           id?: string
+          removed_at?: string | null
+          removed_by?: string | null
         }
         Relationships: [
           {
@@ -1042,6 +1048,21 @@ export type Database = {
         Args: { p_campaign_id: string }
         Returns: undefined
       }
+      admin_agent_delete_eligibility: {
+        Args: { p_agent_id: string }
+        Returns: {
+          eligible: boolean
+          reason: string
+        }[]
+      }
+      admin_agent_outstanding_work_summary: {
+        Args: { p_agent_id: string }
+        Returns: {
+          campaign_id: string
+          campaign_name: string
+          outstanding_count: number
+        }[]
+      }
       admin_assign_participant: {
         Args: {
           p_agent_id: string
@@ -1057,6 +1078,16 @@ export type Database = {
           p_daily_target: number
         }
         Returns: string
+      }
+      admin_campaign_agent_outstanding_work: {
+        Args: { p_agent_id: string; p_campaign_id: string }
+        Returns: {
+          assignment_id: string
+          booking_id: string
+          participant_alias: string
+          scheduled_start: string
+          status: Database["public"]["Enums"]["assignment_status_enum"]
+        }[]
       }
       admin_campaign_delete_eligibility: {
         Args: { p_campaign_id: string }
@@ -1088,8 +1119,22 @@ export type Database = {
         }
         Returns: string
       }
+      admin_deactivate_agent: {
+        Args: { p_agent_id: string }
+        Returns: undefined
+      }
+      admin_delete_agent: {
+        Args: { p_agent_id: string }
+        Returns: {
+          auth_user_id: string
+        }[]
+      }
       admin_delete_campaign: {
         Args: { p_campaign_id: string }
+        Returns: undefined
+      }
+      admin_delete_invitation: {
+        Args: { p_invitation_id: string }
         Returns: undefined
       }
       admin_detach_agent_from_campaign: {
@@ -1129,6 +1174,18 @@ export type Database = {
         Args: { p_auth_user_id: string; p_invitation_id: string }
         Returns: undefined
       }
+      admin_reactivate_agent: {
+        Args: { p_agent_id: string }
+        Returns: undefined
+      }
+      admin_reassign_campaign_agent_work: {
+        Args: {
+          p_campaign_id: string
+          p_from_agent_id: string
+          p_to_agent_id: string
+        }
+        Returns: number
+      }
       admin_resend_invitation: {
         Args: { p_invitation_id: string }
         Returns: {
@@ -1148,6 +1205,10 @@ export type Database = {
           agent_profile_id: string
           auth_user_id: string
         }[]
+      }
+      admin_unassign_campaign_agent_work: {
+        Args: { p_agent_id: string; p_campaign_id: string }
+        Returns: number
       }
       admin_update_campaign_details: {
         Args: {
@@ -1261,6 +1322,7 @@ export type Database = {
         }
         Returns: string
       }
+      fn_agent_has_activity: { Args: { p_agent_id: string }; Returns: boolean }
       fn_campaign_has_activity: {
         Args: { p_campaign_id: string }
         Returns: boolean

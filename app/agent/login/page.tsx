@@ -16,7 +16,9 @@ function AgentLoginPageInner() {
   const [error, setError] = useState(
     searchParams.get("error") === "wrong_role"
       ? "That account isn't an agent. Sign in at the admin login instead."
-      : ""
+      : searchParams.get("error") === "deactivated"
+        ? "This account has been deactivated. Contact your administrator if you think this is a mistake."
+        : ""
   );
   const [submitting, setSubmitting] = useState(false);
 

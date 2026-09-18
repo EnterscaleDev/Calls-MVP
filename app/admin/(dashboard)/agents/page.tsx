@@ -12,6 +12,9 @@ import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { OverflowMenu, type MenuAction } from "@/components/ui/Menu";
 import { AgentProfileModal } from "./AgentProfileModal";
+import { DeactivateAgentModal } from "./_components/DeactivateAgentModal";
+import { RemoveFromCampaignModal } from "./_components/RemoveFromCampaignModal";
+import { DeleteAgentModal } from "./_components/DeleteAgentModal";
 import type { AgentProfile, AgentInvitation } from "@/lib/types";
 
 type DisplayStatus = "active" | "inactive" | "pending" | "expired" | "revoked";
@@ -61,6 +64,9 @@ export default function AgentsPage() {
   const [saving, setSaving] = useState(false);
   const [profileAgent, setProfileAgent] = useState<AgentProfile | null>(null);
   const [viewInvitation, setViewInvitation] = useState<AgentInvitation | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<AgentProfile | null>(null);
+  const [removeFromCampaignTarget, setRemoveFromCampaignTarget] = useState<AgentProfile | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AgentProfile | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | DisplayStatus>("all");
   const [pendingRowId, setPendingRowId] = useState<string | null>(null);
@@ -209,17 +215,28 @@ export default function AgentsPage() {
     setPendingRowId(agent.id);
     setActionError(null);
     const supabase = createClient();
-    const { error: updateError } = await supabase
-      .from("agent_profiles")
-      .update({ status: "active" })
-      .eq("id", agent.id);
+    const { error: rpcError } = await supabase.rpc("admin_reactivate_agent", { p_agent_id: agent.id });
     setPendingRowId(null);
-    if (updateError) {
-      setActionError(updateError.message);
+    if (rpcError) {
+      setActionError(rpcError.message);
       return;
     }
     await refetch();
     showToast(`${agent.name} reactivated`);
+  }
+
+  async function handleDeleteInvitation(invitation: AgentInvitation) {
+    setPendingRowId(invitation.agentProfileId);
+    setActionError(null);
+    const supabase = createClient();
+    const { error: rpcError } = await supabase.rpc("admin_delete_invitation", { p_invitation_id: invitation.id });
+    setPendingRowId(null);
+    if (rpcError) {
+      setActionError(rpcError.message);
+      return;
+    }
+    await refetch();
+    showToast("Invitation deleted");
   }
 
   function actionsForRow(agent: AgentProfile, displayStatus: DisplayStatus): MenuAction[] {
@@ -263,28 +280,64 @@ export default function AgentsPage() {
             campaignIds: db!.campaignAgents.filter((ca) => ca.agentId === agent.id && ca.active).map((ca) => ca.campaignId),
           }),
       });
+      if (invitation) {
+        actions.push({
+          key: "delete-invitation",
+          label: "Delete invitation",
+          variant: "danger",
+          dividerBefore: true,
+          disabled: busy,
+          onSelect: () => handleDeleteInvitation(invitation),
+        });
+      }
+      actions.push({
+        key: "delete-agent",
+        label: "Delete Agent",
+        variant: "danger",
+        disabled: busy,
+        onSelect: () => setDeleteTarget(agent),
+      });
       return actions;
     }
 
     if (displayStatus === "active") {
-      return [
+      const hasCampaigns = db!.campaignAgents.some((ca) => ca.agentId === agent.id && ca.active);
+      const actions: MenuAction[] = [
         { key: "view", label: "View Agent", onSelect: () => setProfileAgent(agent) },
         { key: "manage", label: "Manage access", onSelect: () => setProfileAgent(agent) },
-        {
-          key: "deactivate",
-          label: "Deactivate Agent",
-          variant: "danger",
+      ];
+      if (hasCampaigns) {
+        actions.push({
+          key: "remove-from-campaign",
+          label: "Remove from campaign",
           dividerBefore: true,
           disabled: busy,
-          onSelect: () => setProfileAgent(agent),
-        },
-      ];
+          onSelect: () => setRemoveFromCampaignTarget(agent),
+        });
+      }
+      actions.push({
+        key: "deactivate",
+        label: "Deactivate Agent",
+        variant: "danger",
+        dividerBefore: !hasCampaigns,
+        disabled: busy,
+        onSelect: () => setDeactivateTarget(agent),
+      });
+      return actions;
     }
 
     // inactive
     return [
       { key: "view", label: "View Agent", onSelect: () => setProfileAgent(agent) },
       { key: "reactivate", label: "Reactivate Agent", disabled: busy, onSelect: () => handleReactivate(agent) },
+      {
+        key: "delete-agent",
+        label: "Delete Agent",
+        variant: "danger",
+        dividerBefore: true,
+        disabled: busy,
+        onSelect: () => setDeleteTarget(agent),
+      },
     ];
   }
 
@@ -565,7 +618,46 @@ export default function AgentsPage() {
         ) : null}
       </Modal>
 
-      <AgentProfileModal agent={profileAgent} db={db} refetch={refetch} onClose={() => setProfileAgent(null)} />
+      <AgentProfileModal
+        agent={profileAgent}
+        db={db}
+        refetch={refetch}
+        onClose={() => setProfileAgent(null)}
+        onRequestDeactivate={(a) => setDeactivateTarget(a)}
+      />
+
+      <DeactivateAgentModal
+        agent={deactivateTarget}
+        db={db}
+        onClose={() => setDeactivateTarget(null)}
+        onDeactivated={() => {
+          setDeactivateTarget(null);
+          refetch();
+          showToast(`${deactivateTarget?.name} deactivated`);
+        }}
+      />
+
+      <RemoveFromCampaignModal
+        agent={removeFromCampaignTarget}
+        db={db}
+        onClose={() => setRemoveFromCampaignTarget(null)}
+        onRemoved={() => {
+          setRemoveFromCampaignTarget(null);
+          refetch();
+          showToast(`${removeFromCampaignTarget?.name} removed from the campaign`);
+        }}
+      />
+
+      <DeleteAgentModal
+        agent={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={() => {
+          setDeleteTarget(null);
+          refetch();
+          showToast("Agent deleted");
+        }}
+        onDeactivateInstead={(a) => setDeactivateTarget(a)}
+      />
 
       {toast ? (
         <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3 rounded-[6px] border border-success/20 bg-success-soft px-4 py-3 text-sm text-success shadow-lg">

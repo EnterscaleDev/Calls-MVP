@@ -9,7 +9,9 @@ import { Field, Input, Select } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState, InlineBanner, LoadingScreen, ErrorState } from "@/components/ui/States";
 import { AgentStatusBadge } from "@/components/ui/Badge";
+import { RemoveFromCampaignModal } from "../../../agents/_components/RemoveFromCampaignModal";
 import { useCampaignDetail } from "../campaign-context";
+import type { AgentProfile } from "@/lib/types";
 
 export default function CampaignAgentsPage() {
   const campaign = useCampaignDetail();
@@ -24,10 +26,11 @@ export default function CampaignAgentsPage() {
 
   const [attachAgentId, setAttachAgentId] = useState("");
   const [attachTarget, setAttachTarget] = useState(String(campaign.dailyAgentTarget || 8));
+  const [removeTarget, setRemoveTarget] = useState<AgentProfile | null>(null);
 
   const campaignAgentRows = db
     ? db.campaignAgents
-        .filter((ca) => ca.campaignId === campaign.id)
+        .filter((ca) => ca.campaignId === campaign.id && ca.active)
         .map((ca) => ({ ca, agent: db.agents.find((a) => a.id === ca.agentId) }))
         .filter((row): row is { ca: typeof row.ca; agent: NonNullable<typeof row.agent> } => !!row.agent)
     : [];
@@ -46,16 +49,24 @@ export default function CampaignAgentsPage() {
     }
     setFormError("");
     setSaving(true);
-    const supabase = createClient();
-    const { error: rpcError } = await supabase.rpc("admin_invite_agent", {
-      p_name: name.trim(),
-      p_email: email.trim(),
-      p_campaign_id: campaign.id,
-      p_daily_target: Number(dailyTarget) || 8,
+    // Routed through the API route (not a raw RPC call) so the real
+    // invitation email actually sends — same path as the main Agents page.
+    const response = await fetch("/api/agents/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name.trim(),
+        email: email.trim(),
+        campaignIds: [campaign.id],
+        dailyTarget: Number(dailyTarget) || 8,
+      }),
     });
+    const result = (await response.json().catch(() => ({ ok: false, errorReason: "Unexpected response." }))) as
+      | { ok: true }
+      | { ok: false; errorReason: string };
     setSaving(false);
-    if (rpcError) {
-      setFormError(rpcError.message);
+    if (!result.ok) {
+      setFormError(result.errorReason);
       return;
     }
     setInviteOpen(false);
@@ -153,6 +164,7 @@ export default function CampaignAgentsPage() {
                     <th className="px-5 py-3 font-medium">Email</th>
                     <th className="px-5 py-3 font-medium">Status</th>
                     <th className="px-5 py-3 font-medium">Daily target</th>
+                    <th className="px-5 py-3 font-medium" />
                   </tr>
                 </thead>
                 <tbody>
@@ -171,6 +183,11 @@ export default function CampaignAgentsPage() {
                           defaultValue={ca.dailyTarget}
                           onBlur={(e) => handleTargetBlur(ca.id, ca.dailyTarget, e.target.value)}
                         />
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <Button variant="secondary" size="sm" onClick={() => setRemoveTarget(agent)}>
+                          Remove
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -203,6 +220,17 @@ export default function CampaignAgentsPage() {
           </div>
         </form>
       </Modal>
+
+      <RemoveFromCampaignModal
+        agent={removeTarget}
+        db={db}
+        fixedCampaignId={campaign.id}
+        onClose={() => setRemoveTarget(null)}
+        onRemoved={() => {
+          setRemoveTarget(null);
+          refetch();
+        }}
+      />
     </div>
   );
 }

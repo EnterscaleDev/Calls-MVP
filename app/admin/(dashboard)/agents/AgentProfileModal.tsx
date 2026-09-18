@@ -9,6 +9,7 @@ import { Card, CardBody, StatCard } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge, AgentStatusBadge, CampaignStatusBadge } from "@/components/ui/Badge";
 import { Checkbox, Input } from "@/components/ui/Form";
+import { InlineBanner } from "@/components/ui/States";
 import type { AgentProfile } from "@/lib/types";
 
 function formatDate(iso: string): string {
@@ -20,11 +21,15 @@ export function AgentProfileModal({
   db,
   refetch,
   onClose,
+  onRequestDeactivate,
 }: {
   agent: AgentProfile | null;
   db: AdminData | null;
   refetch: () => Promise<void>;
   onClose: () => void;
+  /** Deactivation needs a cross-campaign outstanding-work check the parent
+   *  page owns (DeactivateAgentModal) — this modal just hands off to it. */
+  onRequestDeactivate: (agent: AgentProfile) => void;
 }) {
   if (!agent || !db) return null;
   // Keyed by agent id: opening a different agent (or the same one again
@@ -37,6 +42,7 @@ export function AgentProfileModal({
       db={db}
       refetch={refetch}
       onClose={onClose}
+      onRequestDeactivate={onRequestDeactivate}
     />
   );
 }
@@ -46,16 +52,18 @@ function AgentProfileModalInner({
   db,
   refetch,
   onClose,
+  onRequestDeactivate,
 }: {
   agent: AgentProfile;
   db: AdminData;
   refetch: () => Promise<void>;
   onClose: () => void;
+  onRequestDeactivate: (agent: AgentProfile) => void;
 }) {
   const [selections, setSelections] = useState<Record<string, { checked: boolean; target: string }>>(() => {
     const next: Record<string, { checked: boolean; target: string }> = {};
     for (const campaign of db.campaigns) {
-      const existing = db.campaignAgents.find((ca) => ca.agentId === agent.id && ca.campaignId === campaign.id);
+      const existing = db.campaignAgents.find((ca) => ca.agentId === agent.id && ca.campaignId === campaign.id && ca.active);
       next[campaign.id] = {
         checked: !!existing,
         target: String(existing?.dailyTarget ?? campaign.dailyAgentTarget ?? 8),
@@ -65,7 +73,7 @@ function AgentProfileModalInner({
   });
   const [phone, setPhone] = useState(agent.phone);
   const [saving, setSaving] = useState(false);
-  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const stats = getAgentProfileStats(db, agent.id);
 
@@ -82,6 +90,7 @@ function AgentProfileModalInner({
 
   async function handleSave() {
     setSaving(true);
+    setSaveError("");
     const supabase = createClient();
     if (phone !== agent.phone) {
       await supabase.from("agent_profiles").update({ phone: phone.trim() }).eq("id", agent.id);
@@ -89,7 +98,7 @@ function AgentProfileModalInner({
     for (const campaign of db.campaigns) {
       const selection = selections[campaign.id];
       if (!selection) continue;
-      const existing = db.campaignAgents.find((ca) => ca.agentId === agent.id && ca.campaignId === campaign.id);
+      const existing = db.campaignAgents.find((ca) => ca.agentId === agent.id && ca.campaignId === campaign.id && ca.active);
       const targetNumber = Number(selection.target) || 0;
 
       if (selection.checked && !existing) {
@@ -101,7 +110,19 @@ function AgentProfileModalInner({
       } else if (selection.checked && existing && existing.dailyTarget !== targetNumber) {
         await supabase.from("campaign_agents").update({ daily_target: targetNumber }).eq("id", existing.id);
       } else if (!selection.checked && existing) {
-        await supabase.rpc("admin_detach_agent_from_campaign", { p_campaign_agent_id: existing.id });
+        const { error: detachError } = await supabase.rpc("admin_detach_agent_from_campaign", {
+          p_campaign_agent_id: existing.id,
+        });
+        if (detachError) {
+          // Has outstanding work in this campaign — admin_detach_agent_from_campaign
+          // refuses to run blind. Revert the checkbox and point at the guided
+          // "Remove from campaign" flow (••• menu) instead of failing silently.
+          setSaving(false);
+          setSaveError(`${campaign.name}: ${detachError.message}`);
+          setSelections((prev) => ({ ...prev, [campaign.id]: { ...prev[campaign.id], checked: true } }));
+          await refetch();
+          return;
+        }
       }
     }
     setSaving(false);
@@ -109,21 +130,11 @@ function AgentProfileModalInner({
     onClose();
   }
 
-  async function handleDeactivate() {
-    // Reactivating (inactive -> active) needs no confirmation per the
-    // product spec; only the destructive active -> inactive direction does.
-    if (agent.status !== "inactive" && !confirmDeactivate) {
-      setConfirmDeactivate(true);
-      return;
-    }
+  async function handleReactivate() {
     setSaving(true);
     const supabase = createClient();
-    await supabase
-      .from("agent_profiles")
-      .update({ status: agent.status === "inactive" ? "active" : "inactive" })
-      .eq("id", agent.id);
+    await supabase.rpc("admin_reactivate_agent", { p_agent_id: agent.id });
     setSaving(false);
-    setConfirmDeactivate(false);
     await refetch();
     onClose();
   }
@@ -146,6 +157,8 @@ function AgentProfileModalInner({
         <p className="-mt-2 text-xs text-foreground-muted">
           {agent.email} · joined {formatDate(agent.createdAt)}
         </p>
+
+        {saveError ? <InlineBanner kind="danger">{saveError}</InlineBanner> : null}
 
         <div>
           <label className="mb-1.5 block text-sm font-medium text-foreground">Phone (for real calls)</label>
@@ -216,31 +229,26 @@ function AgentProfileModalInner({
           </CardBody>
         </Card>
 
-        {confirmDeactivate ? (
-          <div className="rounded-[6px] border border-danger/25 bg-danger-soft p-3">
-            <p className="text-sm font-semibold text-danger">Deactivate {agent.name}?</p>
-            <p className="mt-1 text-sm text-danger/80">
-              {agent.name} will no longer be able to access assigned calls. Their previous call history and
-              notes will remain available.
-            </p>
-            <div className="mt-3 flex justify-end gap-2">
-              <Button variant="secondary" size="sm" onClick={() => setConfirmDeactivate(false)} disabled={saving}>
-                Cancel
-              </Button>
-              <Button variant="danger" size="sm" onClick={handleDeactivate} disabled={saving}>
-                {saving ? "Deactivating..." : "Deactivate Agent"}
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
         <div className="flex flex-wrap justify-end gap-3">
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="danger" onClick={handleDeactivate} disabled={saving}>
-            {agent.status === "inactive" ? "Reactivate" : "Deactivate"}
-          </Button>
+          {agent.status === "inactive" ? (
+            <Button variant="danger" onClick={handleReactivate} disabled={saving}>
+              {saving ? "Reactivating..." : "Reactivate"}
+            </Button>
+          ) : (
+            <Button
+              variant="danger"
+              onClick={() => {
+                onClose();
+                onRequestDeactivate(agent);
+              }}
+              disabled={saving}
+            >
+              Deactivate
+            </Button>
+          )}
           <Button onClick={handleSave} disabled={saving}>
             {saving ? "Saving..." : "Save permissions"}
           </Button>

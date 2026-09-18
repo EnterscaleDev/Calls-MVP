@@ -183,7 +183,7 @@ export function listAgentsWithStats(
 ) {
   return db.agents.map((agent) => {
     const campaignIds = new Set(
-      db.campaignAgents.filter((ca) => ca.agentId === agent.id).map((ca) => ca.campaignId)
+      db.campaignAgents.filter((ca) => ca.agentId === agent.id && ca.active).map((ca) => ca.campaignId)
     );
     const campaignNames = [...campaignIds].map((id) => getCampaign(db, id)?.name).filter(Boolean);
     const now = new Date();
