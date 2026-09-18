@@ -159,7 +159,10 @@ export default function InvitationsPage() {
 
         const contact = db.contacts.find((c) => c.id === participant.contactId);
         const firstName = (contact?.name ?? "").trim().split(/\s+/)[0] || "there";
-        const campaignLink = `${window.location.origin}/participate/${token}`;
+        // Routed through our own click-tracking redirect (app/r/[invitationId])
+        // rather than straight to /participate — Dotgo's own track_url never
+        // fired on a real send/click, so this is self-hosted instead.
+        const campaignLink = `${window.location.origin}/r/${invitationRow.id}?t=${token}`;
         const personalizedBody = (incentiveText ? `${body}\n\n${incentiveText}` : body)
           .replaceAll("{{first_name}}", firstName)
           .replaceAll("{{campaign_link}}", campaignLink);

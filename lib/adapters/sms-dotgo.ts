@@ -7,20 +7,18 @@ import "server-only";
  * bodies below are taken directly from Dotgo's own "How To Use > CURL"
  * sample and API Reference parameter tables, not guessed.
  *
- * Two things their public docs leave genuinely open, called out where they
- * matter below:
+ * Confirmed against real sends/deliveries, not just docs:
  *  1. The synchronous POST response is only ever {"status":"ok"} or
  *     {"status":"error",...} — no message id. The real provider message id
- *     (`ref_id`) only appears later, via the async callback_url webhook.
- *     That callback's own parameter table doesn't list an `id` field, but a
- *     *different* Dotgo callback (URL-click tracking) does echo back the
- *     caller's own request `id` in its sample payload — so we pass our own
- *     campaign_invitations row id as the request `id` on the chance it's
- *     echoed here too, with a phone-number fallback in the webhook handler
- *     if it isn't. See app/api/sms/dotgo-callback/route.ts.
- *  2. Every example in their docs writes phone numbers as digits only, no
- *     leading "+" (e.g. "919886038842") — inferred, not stated outright, so
- *     we strip it before sending. Worth confirming against a real send.
+ *     (`ref_id`) only appears later, via the async callback_url webhook —
+ *     see app/api/sms/dotgo-callback/route.ts, which correlates back to our
+ *     own campaign_invitations row.
+ *  2. Phone numbers are digits only, no leading "+", confirmed against a
+ *     real delivered send — stripped before sending accordingly.
+ *  3. Dotgo's advertised click-tracking (a `track_url` param, meant to
+ *     auto-wrap links and fire a click callback) never actually fired on a
+ *     real send+click. Click tracking is self-hosted instead — see
+ *     app/r/[invitationId]/route.ts.
  */
 
 const DOTGO_BASE_URL = process.env.DOTGO_BASE_URL || "https://konnect.dotgo.com/api/v1";
@@ -33,11 +31,6 @@ export interface SendDotgoSmsInput {
   requestId: string;
   senderMask?: string;
   callbackUrl?: string;
-  /** Delivery-status callback and click-tracking are separate Dotgo
-   *  features/params — track_url is what turns on auto-wrapping any link
-   *  in `body` with a Dotgo-hosted short link and firing a click event to
-   *  this URL. See app/api/sms/dotgo-click-callback/route.ts. */
-  trackUrl?: string;
 }
 
 export type SendDotgoSmsResult =
@@ -65,7 +58,6 @@ export async function sendDotgoSms(input: SendDotgoSmsInput): Promise<SendDotgoS
   };
   if (input.senderMask) payload.sender_mask = input.senderMask;
   if (input.callbackUrl) payload.callback_url = input.callbackUrl;
-  if (input.trackUrl) payload.track_url = input.trackUrl;
 
   let response: Response;
   try {
