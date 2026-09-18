@@ -5,18 +5,41 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAdminData } from "@/lib/hooks/useAdminData";
 import { Card, CardHeader, CardBody, StatCard } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Form";
-import { EmptyState, LoadingScreen, ErrorState } from "@/components/ui/States";
+import { InlineBanner, EmptyState, LoadingScreen, ErrorState } from "@/components/ui/States";
 import { formatDateTime } from "../_lib/format";
 import type { Database } from "@/lib/supabase/database.types";
 
 type CreditTransactionRow = Database["public"]["Tables"]["credit_transactions"]["Row"];
+type DotgoBalanceState =
+  | { status: "idle" | "loading" }
+  | { status: "ok"; currency: string; amount: number; mode: string; accountName: string }
+  | { status: "error"; errorReason: string };
 
 export default function CreditsPage() {
   const { data: db, loading: dbLoading, error: dbError } = useAdminData();
   const [transactions, setTransactions] = useState<CreditTransactionRow[] | null>(null);
   const [loadError, setLoadError] = useState("");
   const [accountFilter, setAccountFilter] = useState<"all" | "sms" | "voice">("all");
+  const [dotgoBalance, setDotgoBalance] = useState<DotgoBalanceState>({ status: "idle" });
+
+  async function fetchDotgoBalance() {
+    setDotgoBalance({ status: "loading" });
+    const response = await fetch("/api/credits/dotgo-balance");
+    const result = await response.json().catch(() => ({ ok: false, errorReason: "Unexpected response." }));
+    if (result.ok) {
+      setDotgoBalance({
+        status: "ok",
+        currency: result.currency,
+        amount: result.amount,
+        mode: result.mode,
+        accountName: result.accountName,
+      });
+    } else {
+      setDotgoBalance({ status: "error", errorReason: result.errorReason ?? "Couldn't fetch Dotgo balance." });
+    }
+  }
 
   useEffect(() => {
     const supabase = createClient();
@@ -86,6 +109,39 @@ export default function CreditsPage() {
         <StatCard label="SMS credit" value={db.orgCredits.sms.toLocaleString()} />
         <StatCard label="Voice credit" value={`${db.orgCredits.voiceMinutes.toLocaleString()} min`} />
       </div>
+
+      <Card>
+        <CardHeader
+          title="Real Dotgo balance"
+          description="Your actual SMS provider balance — a separate number from the internal SMS credit above, not automatically kept in sync."
+        />
+        <CardBody className="flex flex-col gap-3">
+          {dotgoBalance.status === "ok" ? (
+            <div>
+              <p className="text-2xl font-semibold text-foreground">
+                {dotgoBalance.currency} {dotgoBalance.amount.toLocaleString()}
+              </p>
+              <p className="mt-1 text-xs text-foreground-muted">
+                {dotgoBalance.accountName} · {dotgoBalance.mode === "paid" ? "Paid account" : dotgoBalance.mode}
+              </p>
+            </div>
+          ) : dotgoBalance.status === "error" ? (
+            <InlineBanner kind="danger">{dotgoBalance.errorReason}</InlineBanner>
+          ) : (
+            <p className="text-sm text-foreground-muted">Not fetched yet.</p>
+          )}
+          <div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={fetchDotgoBalance}
+              disabled={dotgoBalance.status === "loading"}
+            >
+              {dotgoBalance.status === "loading" ? "Fetching..." : "Fetch real balance"}
+            </Button>
+          </div>
+        </CardBody>
+      </Card>
 
       <Card>
         <CardHeader

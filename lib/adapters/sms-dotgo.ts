@@ -102,3 +102,54 @@ export function mapDotgoCallbackStatus(status: string | undefined): "sent" | "de
   if (status === "sent") return "sent";
   return "failed";
 }
+
+export type DotgoBalanceResult =
+  | { ok: true; mode: string; currency: string; amount: number; accountName: string }
+  | { ok: false; errorReason: string };
+
+/**
+ * Real Dotgo account balance (GET .../Balance, confirmed against the real
+ * account — returns e.g. {"account_balance":"NGN5,896.50"}). This is the
+ * *actual* Dotgo balance in real currency — a different thing entirely from
+ * this app's own internal org_credits.sms ledger (an abstract count, not
+ * money), so callers should show it alongside that number, never merge the
+ * two.
+ */
+export async function getDotgoBalance(): Promise<DotgoBalanceResult> {
+  const accountId = process.env.DOTGO_ACCOUNT_ID;
+  const apiToken = process.env.DOTGO_API_TOKEN;
+  if (!accountId || !apiToken) {
+    return { ok: false, errorReason: "Dotgo isn't configured — set DOTGO_ACCOUNT_ID and DOTGO_API_TOKEN." };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${DOTGO_BASE_URL}/Accounts/${accountId}/Balance`, {
+      headers: { Authorization: apiToken },
+    });
+  } catch (error) {
+    return { ok: false, errorReason: error instanceof Error ? error.message : "Network error contacting Dotgo" };
+  }
+
+  let data: { mode?: string; account_balance?: string; name?: string; status?: string };
+  try {
+    data = await response.json();
+  } catch {
+    return { ok: false, errorReason: `Dotgo returned a non-JSON response (HTTP ${response.status})` };
+  }
+
+  if (!response.ok || data.status !== "ok" || !data.account_balance) {
+    return { ok: false, errorReason: `Dotgo rejected the balance request (HTTP ${response.status})` };
+  }
+
+  // account_balance is a formatted string like "NGN5,896.50" — split the
+  // leading currency letters from the numeric amount.
+  const match = data.account_balance.match(/^([A-Za-z]*)\s*([\d,]+(?:\.\d+)?)$/);
+  const currency = match?.[1] || "";
+  const amount = match ? Number(match[2].replace(/,/g, "")) : NaN;
+  if (!match || Number.isNaN(amount)) {
+    return { ok: false, errorReason: `Couldn't parse Dotgo's balance format: "${data.account_balance}"` };
+  }
+
+  return { ok: true, mode: data.mode ?? "", currency, amount, accountName: data.name ?? "" };
+}
