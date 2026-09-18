@@ -55,6 +55,101 @@ export type Database = {
           },
         ]
       }
+      appointment_reminders: {
+        Row: {
+          booking_id: string
+          campaign_id: string
+          campaign_participant_id: string
+          cancelled_at: string | null
+          created_at: string
+          delivered_at: string | null
+          failed_at: string | null
+          failure_reason: string | null
+          id: string
+          last_attempt_at: string | null
+          organisation_id: string
+          provider_message_id: string | null
+          queued_at: string | null
+          reminder_type: Database["public"]["Enums"]["appointment_reminder_type_enum"]
+          scheduled_for: string
+          send_attempts: number
+          sent_at: string | null
+          status: Database["public"]["Enums"]["appointment_reminder_status_enum"]
+          updated_at: string
+        }
+        Insert: {
+          booking_id: string
+          campaign_id: string
+          campaign_participant_id: string
+          cancelled_at?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          failed_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          organisation_id: string
+          provider_message_id?: string | null
+          queued_at?: string | null
+          reminder_type: Database["public"]["Enums"]["appointment_reminder_type_enum"]
+          scheduled_for: string
+          send_attempts?: number
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["appointment_reminder_status_enum"]
+          updated_at?: string
+        }
+        Update: {
+          booking_id?: string
+          campaign_id?: string
+          campaign_participant_id?: string
+          cancelled_at?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          failed_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          organisation_id?: string
+          provider_message_id?: string | null
+          queued_at?: string | null
+          reminder_type?: Database["public"]["Enums"]["appointment_reminder_type_enum"]
+          scheduled_for?: string
+          send_attempts?: number
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["appointment_reminder_status_enum"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_reminders_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "interview_bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointment_reminders_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointment_reminders_campaign_participant_id_fkey"
+            columns: ["campaign_participant_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointment_reminders_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_events: {
         Row: {
           action: string
@@ -526,7 +621,12 @@ export type Database = {
           name: string
           organisation_id: string
           recording_enabled: boolean
+          reminder_1h_offset_minutes: number
+          reminder_24h_offset_minutes: number
           research_objective: string
+          send_booking_confirmation: boolean
+          send_reminder_1h: boolean
+          send_reminder_24h: boolean
           sender_id: string
           start_date: string
           status: Database["public"]["Enums"]["campaign_status_enum"]
@@ -555,7 +655,12 @@ export type Database = {
           name: string
           organisation_id: string
           recording_enabled?: boolean
+          reminder_1h_offset_minutes?: number
+          reminder_24h_offset_minutes?: number
           research_objective?: string
+          send_booking_confirmation?: boolean
+          send_reminder_1h?: boolean
+          send_reminder_24h?: boolean
           sender_id: string
           start_date: string
           status?: Database["public"]["Enums"]["campaign_status_enum"]
@@ -584,7 +689,12 @@ export type Database = {
           name?: string
           organisation_id?: string
           recording_enabled?: boolean
+          reminder_1h_offset_minutes?: number
+          reminder_24h_offset_minutes?: number
           research_objective?: string
+          send_booking_confirmation?: boolean
+          send_reminder_1h?: boolean
+          send_reminder_24h?: boolean
           sender_id?: string
           start_date?: string
           status?: Database["public"]["Enums"]["campaign_status_enum"]
@@ -1327,6 +1437,29 @@ export type Database = {
         Args: { p_campaign_id: string }
         Returns: boolean
       }
+      fn_cancel_scheduled_reminders: {
+        Args: { p_booking_id: string }
+        Returns: undefined
+      }
+      fn_claim_due_reminders: {
+        Args: { p_limit?: number }
+        Returns: {
+          booking_id: string
+          campaign_name: string
+          campaign_participant_id: string
+          client_name: string
+          duration_minutes: number
+          first_name: string
+          incentive_description: string
+          incentive_title: string
+          phone: string
+          reminder_id: string
+          reminder_type: Database["public"]["Enums"]["appointment_reminder_type_enum"]
+          scheduled_start: string
+          send_attempts: number
+          timezone: string
+        }[]
+      }
       fn_current_agent_id: { Args: never; Returns: string }
       fn_is_admin: { Args: never; Returns: boolean }
       fn_participant_alias: {
@@ -1336,6 +1469,18 @@ export type Database = {
       fn_participant_id_from_token: {
         Args: { p_token: string }
         Returns: string
+      }
+      fn_record_reminder_outcome: {
+        Args: {
+          p_failure_reason?: string
+          p_ok: boolean
+          p_reminder_id: string
+        }
+        Returns: undefined
+      }
+      fn_schedule_appointment_reminders: {
+        Args: { p_booking_id: string }
+        Returns: undefined
       }
       log_sms_batch_sent: {
         Args: { p_campaign_id: string; p_recipient_count: number }
@@ -1402,6 +1547,21 @@ export type Database = {
         | "expired"
         | "revoked"
       agent_status_enum: "invited" | "active" | "inactive"
+      appointment_reminder_status_enum:
+        | "scheduled"
+        | "processing"
+        | "queued"
+        | "sent"
+        | "delivered"
+        | "failed"
+        | "cancelled"
+        | "skipped"
+      appointment_reminder_type_enum:
+        | "booking_confirmation"
+        | "reminder_24h"
+        | "reminder_1h"
+        | "reschedule_confirmation"
+        | "cancellation_confirmation"
       assignment_status_enum:
         | "assigned"
         | "in_progress"
@@ -1592,6 +1752,23 @@ export const Constants = {
         "revoked",
       ],
       agent_status_enum: ["invited", "active", "inactive"],
+      appointment_reminder_status_enum: [
+        "scheduled",
+        "processing",
+        "queued",
+        "sent",
+        "delivered",
+        "failed",
+        "cancelled",
+        "skipped",
+      ],
+      appointment_reminder_type_enum: [
+        "booking_confirmation",
+        "reminder_24h",
+        "reminder_1h",
+        "reschedule_confirmation",
+        "cancellation_confirmation",
+      ],
       assignment_status_enum: [
         "assigned",
         "in_progress",
