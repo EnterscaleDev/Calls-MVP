@@ -70,7 +70,13 @@ export async function POST(request: Request) {
   }
 
   const appUrl = process.env.APP_PUBLIC_URL;
-  const callbackUrl = appUrl ? `${appUrl}/api/voice/smsala-callback` : undefined;
+  if (!appUrl) {
+    return NextResponse.json(
+      { ok: false, errorReason: "APP_PUBLIC_URL isn't set — SMSala requires a callback URL." },
+      { status: 500 }
+    );
+  }
+  const callbackUrl = `${appUrl}/api/voice/smsala-callback`;
 
   const result = await bridgeCall({
     callerNumber: agentRow.phone,

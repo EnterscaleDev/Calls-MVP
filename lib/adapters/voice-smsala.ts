@@ -7,18 +7,17 @@ import "server-only";
  * connects the call to `calledNumber` (the participant). Server-only —
  * neither phone number nor SMSALA_AUTH_TOKEN may reach the browser.
  *
- * Two things the doc leaves genuinely ambiguous, called out where they
- * matter below:
- *  1. Auth is documented as HTTP Basic (username: your API key, password:
- *     "the integration authentication token"), but the example JSON body
- *     ALSO includes an `apiToken` field. Sending both — Basic Auth with
- *     key/token, and apiToken=token in the body — on the theory the body
- *     field mirrors the Basic Auth password. Worth confirming against a
- *     real call.
- *  2. The synchronous response only confirms the call was *submitted*
- *     (CallSubmitted true/false) — actual ringing/answered status arrives
- *     later via callBackUrl, whose payload shape isn't documented at all.
- *     See app/api/voice/smsala-callback/route.ts for the same caveat.
+ * Confirmed against the real API (its docs get two things wrong):
+ *  1. Auth is HTTP Basic — literally the string "api_key" as username, the
+ *     "Secret" from SMSala's Voice/VoIP connection page as password — sent
+ *     alongside the same secret as the body's `apiToken` field. The doc's
+ *     example wraps the request body in a JSON array; the real endpoint
+ *     rejects that and wants a plain object instead.
+ *  2. `callBackUrl` is documented as optional but the API rejects a request
+ *     without one — always sent here.
+ * Still unconfirmed: the *response* to this endpoint does come back as an
+ * array (matching the doc), but the async callBackUrl payload shape isn't
+ * documented at all — see app/api/voice/smsala-callback/route.ts.
  */
 
 const SMSALA_BASE_URL = "https://api2.smsala.com/api";
@@ -28,7 +27,8 @@ export interface BridgeCallInput {
   callerNumber: string;
   calledNumber: string;
   clientUniqueId: string;
-  callbackUrl?: string;
+  /** Required by the real API despite the doc marking it optional. */
+  callbackUrl: string;
 }
 
 export type BridgeCallResult =
@@ -49,15 +49,13 @@ export async function bridgeCall(input: BridgeCallInput): Promise<BridgeCallResu
     };
   }
 
-  const payload = [
-    {
-      apiToken: authToken,
-      callerNumber: toSmsalaPhone(input.callerNumber),
-      calledNumber: toSmsalaPhone(input.calledNumber),
-      clientUniqueId: input.clientUniqueId,
-      ...(input.callbackUrl ? { callBackUrl: input.callbackUrl } : {}),
-    },
-  ];
+  const payload = {
+    apiToken: authToken,
+    callerNumber: toSmsalaPhone(input.callerNumber),
+    calledNumber: toSmsalaPhone(input.calledNumber),
+    clientUniqueId: input.clientUniqueId,
+    callBackUrl: input.callbackUrl,
+  };
 
   let response: Response;
   try {
