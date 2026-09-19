@@ -11,7 +11,12 @@ import { EmptyState } from "@/components/ui/States";
 import { formatDateTime, labelize } from "../../../../_lib/format";
 import type { InterviewBooking } from "@/lib/types";
 
-const RESENDABLE = new Set(["failed", "cancelled", "skipped"]);
+// Mirrors admin_requeue_reminder's own gate exactly: only a genuinely
+// failed send attempt is resendable. A cancelled/skipped reminder means
+// "this message should not go out" (interview moved/cancelled, or the
+// window passed) — resending those would send a stale or contradictory
+// message, which the spec explicitly calls out as something to prevent.
+const RESENDABLE = new Set(["failed"]);
 
 /**
  * Per-booking reminder history — what's been scheduled/sent for this
