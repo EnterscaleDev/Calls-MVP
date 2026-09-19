@@ -57,6 +57,7 @@ function ManageAgentModalInner({
 }) {
   const activeAssignments = db.campaignAgents.filter((ca) => ca.agentId === agent.id && ca.active);
   const [target, setTarget] = useState(String(activeAssignments.reduce((s, ca) => s + ca.dailyTarget, 0) || 8));
+  const [phone, setPhone] = useState(agent.phone);
   const [add, setAdd] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -82,10 +83,13 @@ function ManageAgentModalInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agent.id]);
 
-  async function saveTarget() {
+  async function saveChanges() {
     setSaving(true);
     setError("");
     const supabase = createClient();
+    if (phone !== agent.phone) {
+      await supabase.from("agent_profiles").update({ phone: phone.trim() }).eq("id", agent.id);
+    }
     // Split evenly-ish isn't meaningful here — the prototype's single
     // "daily call target" field maps to each active campaign_agents row's
     // own target; set them all to the same value, matching what a single
@@ -94,7 +98,7 @@ function ManageAgentModalInner({
       await supabase.from("campaign_agents").update({ daily_target: Number(target) || 0 }).eq("id", ca.id);
     }
     setSaving(false);
-    toast("Daily target updated");
+    toast("Changes saved");
   }
 
   async function handleAdd() {
@@ -125,8 +129,8 @@ function ManageAgentModalInner({
           </Btn>
           <div style={{ marginLeft: "auto" }} className="btns">
             <Btn onClick={close}>Close</Btn>
-            <Btn k="p" disabled={saving} onClick={saveTarget}>
-              {saving ? "Saving..." : "Save target"}
+            <Btn k="p" disabled={saving} onClick={saveChanges}>
+              {saving ? "Saving..." : "Save changes"}
             </Btn>
           </div>
         </>
@@ -139,6 +143,9 @@ function ManageAgentModalInner({
       ) : null}
       <Field l="Daily call target">
         <input type="number" value={target} onChange={(e) => setTarget(e.target.value)} />
+      </Field>
+      <Field l="Phone (for real calls)" hint="Real telephony rings this number first, then bridges to the participant. Required before this agent can start a real call.">
+        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+2348012345678" />
       </Field>
       <div className="rule" />
       <div className="field-l" style={{ marginBottom: 6 }}>
