@@ -3,128 +3,52 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { AdminData } from "@/lib/hooks/useAdminData";
-import { Button } from "@/components/ui/Button";
-import { Select } from "@/components/ui/Form";
-import { Modal } from "@/components/ui/Modal";
-import { InlineBanner } from "@/components/ui/States";
+import { Modal, Btn, Note } from "@/components/ros/ros-ui";
 import type { AgentProfile } from "@/lib/types";
 
-type Phase = "checking" | "confirm_clean" | "resolve_outstanding" | "error";
+export interface RemoveCtx {
+  agent: AgentProfile;
+  campaignId: string;
+}
 
-/**
- * "Remove from campaign" — the lighter-weight sibling of deactivation.
- * Used from both the Agents list ••• menu (campaign not yet known — picks
- * one first) and Campaign → Agents (campaign already fixed via
- * fixedCampaignId).
- */
 export function RemoveFromCampaignModal({
-  agent,
+  ctx,
   db,
-  fixedCampaignId,
-  onClose,
-  onRemoved,
+  close,
+  toast,
 }: {
-  agent: AgentProfile | null;
+  ctx: RemoveCtx | null;
   db: AdminData;
-  fixedCampaignId?: string;
-  onClose: () => void;
-  onRemoved: () => void;
+  close: () => void;
+  toast: (m: string) => void;
 }) {
-  if (!agent) return null;
-  return (
-    <RemoveFromCampaignModalInner
-      key={agent.id}
-      agent={agent}
-      db={db}
-      fixedCampaignId={fixedCampaignId}
-      onClose={onClose}
-      onRemoved={onRemoved}
-    />
-  );
+  if (!ctx) return <Modal open={false} close={close} title="" />;
+  return <RemoveFromCampaignModalInner key={ctx.agent.id + ":" + ctx.campaignId} ctx={ctx} db={db} close={close} toast={toast} />;
 }
 
 function RemoveFromCampaignModalInner({
-  agent,
+  ctx,
   db,
-  fixedCampaignId,
-  onClose,
-  onRemoved,
+  close,
+  toast,
 }: {
-  agent: AgentProfile;
+  ctx: RemoveCtx;
   db: AdminData;
-  fixedCampaignId?: string;
-  onClose: () => void;
-  onRemoved: () => void;
+  close: () => void;
+  toast: (m: string) => void;
 }) {
-  const activeAssignments = db.campaignAgents.filter((ca) => ca.agentId === agent.id && ca.active);
-  const eligibleCampaigns = activeAssignments
-    .map((ca) => ({ ca, campaign: db.campaigns.find((c) => c.id === ca.campaignId) }))
-    .filter((r): r is { ca: typeof r.ca; campaign: NonNullable<typeof r.campaign> } => !!r.campaign);
+  const { agent, campaignId } = ctx;
+  const campaign = db.campaigns.find((c) => c.id === campaignId);
+  const campaignAgent = db.campaignAgents.find((ca) => ca.campaignId === campaignId && ca.agentId === agent.id && ca.active);
+  const eligible = db.campaignAgents
+    .filter((ca) => ca.campaignId === campaignId && ca.active && ca.agentId !== agent.id)
+    .map((ca) => db.agents.find((a) => a.id === ca.agentId))
+    .filter((a): a is AgentProfile => !!a && a.status === "active");
 
-  const [campaignId, setCampaignId] = useState<string | null>(
-    fixedCampaignId ?? (eligibleCampaigns.length === 1 ? eligibleCampaigns[0].campaign.id : null)
-  );
-
-  if (!campaignId) {
-    return (
-      <Modal open onClose={onClose} title={`Remove ${agent.name} from a campaign`}>
-        <div className="flex flex-col gap-4">
-          <Select value="" onChange={(e) => setCampaignId(e.target.value)}>
-            <option value="" disabled>
-              Choose a campaign...
-            </option>
-            {eligibleCampaigns.map((r) => (
-              <option key={r.campaign.id} value={r.campaign.id}>
-                {r.campaign.name}
-              </option>
-            ))}
-          </Select>
-          <div className="flex justify-end">
-            <Button variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    );
-  }
-
-  const selected = eligibleCampaigns.find((r) => r.campaign.id === campaignId);
-  // Keyed by campaignId: picking a (different) campaign mounts a fresh
-  // outstanding-work check instead of an effect resetting state.
-  return (
-    <CampaignRemovalCheck
-      key={campaignId}
-      agent={agent}
-      db={db}
-      campaignId={campaignId}
-      campaignName={selected?.campaign.name ?? ""}
-      campaignAgentId={selected?.ca.id ?? ""}
-      onClose={onClose}
-      onRemoved={onRemoved}
-    />
-  );
-}
-
-function CampaignRemovalCheck({
-  agent,
-  db,
-  campaignId,
-  campaignName,
-  campaignAgentId,
-  onClose,
-  onRemoved,
-}: {
-  agent: AgentProfile;
-  db: AdminData;
-  campaignId: string;
-  campaignName: string;
-  campaignAgentId: string;
-  onClose: () => void;
-  onRemoved: () => void;
-}) {
-  const [phase, setPhase] = useState<Phase>("checking");
+  const [phase, setPhase] = useState<"checking" | "ready" | "error">("checking");
   const [outstandingCount, setOutstandingCount] = useState(0);
+  const [mode, setMode] = useState<"reassign" | "unassign">("reassign");
+  const [to, setTo] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -138,51 +62,48 @@ function CampaignRemovalCheck({
           setError(rpcError.message);
           return;
         }
-        setOutstandingCount(data?.length ?? 0);
-        setPhase((data?.length ?? 0) > 0 ? "resolve_outstanding" : "confirm_clean");
+        setOutstandingCount((data ?? []).length);
+        setPhase("ready");
       });
-  }, [campaignId, agent.id]);
+  }, [agent.id, campaignId]);
 
-  function eligibleReplacementAgents() {
-    return db.campaignAgents
-      .filter((ca) => ca.campaignId === campaignId && ca.active && ca.agentId !== agent.id)
-      .map((ca) => db.agents.find((a) => a.id === ca.agentId))
-      .filter((a): a is NonNullable<typeof a> => !!a);
+  function finish(msg: string) {
+    toast(msg);
+    close();
   }
 
-  async function handleRemoveClean() {
+  async function doSimple() {
+    if (!campaignAgent) return;
     setSubmitting(true);
     setError("");
     const supabase = createClient();
-    const { error: rpcError } = await supabase.rpc("admin_detach_agent_from_campaign", {
-      p_campaign_agent_id: campaignAgentId,
-    });
+    const { error: rpcError } = await supabase.rpc("admin_detach_agent_from_campaign", { p_campaign_agent_id: campaignAgent.id });
     setSubmitting(false);
     if (rpcError) {
       setError(rpcError.message);
       return;
     }
-    onRemoved();
+    finish(agent.name.split(" ")[0] + " removed from " + (campaign?.name ?? "the campaign") + ".");
   }
 
-  async function handleReassign(toAgentId: string) {
+  async function doReassign() {
     setSubmitting(true);
     setError("");
     const supabase = createClient();
     const { error: rpcError } = await supabase.rpc("admin_reassign_campaign_agent_work", {
       p_campaign_id: campaignId,
       p_from_agent_id: agent.id,
-      p_to_agent_id: toAgentId,
+      p_to_agent_id: to,
     });
-    setSubmitting(false);
     if (rpcError) {
+      setSubmitting(false);
       setError(rpcError.message);
       return;
     }
-    onRemoved();
+    await doSimple();
   }
 
-  async function handleMoveToUnassigned() {
+  async function doUnassign() {
     setSubmitting(true);
     setError("");
     const supabase = createClient();
@@ -190,105 +111,98 @@ function CampaignRemovalCheck({
       p_campaign_id: campaignId,
       p_agent_id: agent.id,
     });
-    setSubmitting(false);
     if (rpcError) {
+      setSubmitting(false);
       setError(rpcError.message);
       return;
     }
-    onRemoved();
+    await doSimple();
   }
+
+  const first = agent.name.split(" ")[0];
+  const title = "Remove " + first + " from " + (campaign?.name ?? "…") + "?";
 
   if (phase === "checking") {
     return (
-      <Modal open onClose={onClose} title={`Remove ${agent.name} from ${campaignName}?`} description="Checking outstanding work...">
-        <div className="flex justify-end">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-        </div>
+      <Modal open close={close} title={title}>
+        <p className="xs">Checking outstanding work…</p>
       </Modal>
     );
   }
-
   if (phase === "error") {
     return (
-      <Modal open onClose={onClose} title={`Remove ${agent.name} from ${campaignName}?`}>
-        <InlineBanner kind="danger">{error}</InlineBanner>
-        <div className="mt-4 flex justify-end">
-          <Button variant="secondary" onClick={onClose}>
-            Close
-          </Button>
-        </div>
+      <Modal open close={close} title={title} foot={<Btn onClick={close}>Close</Btn>}>
+        <Note tone="r">{error}</Note>
       </Modal>
     );
   }
 
-  if (phase === "confirm_clean") {
-    return (
-      <Modal
-        open
-        onClose={() => (submitting ? undefined : onClose())}
-        title={`Remove ${agent.name} from ${campaignName}?`}
-        description={`${agent.name} will no longer be able to access this campaign or receive new calls from it.`}
-      >
-        <div className="flex flex-col gap-3">
-          {error ? <InlineBanner kind="danger">{error}</InlineBanner> : null}
-          <div className="flex justify-end gap-3">
-            <Button variant="secondary" disabled={submitting} onClick={onClose}>
-              Cancel
-            </Button>
-            <Button variant="danger" disabled={submitting} onClick={handleRemoveClean}>
-              {submitting ? "Removing..." : "Remove Agent"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    );
-  }
-
-  // resolve_outstanding
-  const eligible = eligibleReplacementAgents();
   return (
-    <Modal open onClose={() => (submitting ? undefined : onClose())} title={`Remove ${agent.name} from ${campaignName}?`}>
-      <div className="flex flex-col gap-4">
-        {error ? <InlineBanner kind="danger">{error}</InlineBanner> : null}
-        <p className="text-sm text-foreground">
-          {agent.name} currently has {outstandingCount} active call assignment{outstandingCount === 1 ? "" : "s"}.
-        </p>
-        <div className="flex flex-col gap-2">
-          {eligible.length > 0 ? (
-            <div>
-              <p className="mb-1.5 text-sm font-medium text-foreground">Reassign all calls to</p>
-              <Select
-                disabled={submitting}
-                defaultValue=""
-                onChange={(e) => e.target.value && handleReassign(e.target.value)}
-              >
-                <option value="" disabled>
-                  Select agent...
-                </option>
+    <Modal
+      open
+      close={close}
+      title={title}
+      foot={
+        !outstandingCount ? (
+          <>
+            <Btn onClick={close}>Cancel</Btn>
+            <Btn k="r" disabled={submitting} onClick={doSimple}>
+              Remove Agent
+            </Btn>
+          </>
+        ) : (
+          <>
+            <Btn onClick={close}>Cancel</Btn>
+            {mode === "reassign" ? (
+              <Btn k="p" disabled={!to || submitting} onClick={doReassign}>
+                Reassign and remove
+              </Btn>
+            ) : (
+              <Btn k="r" disabled={submitting} onClick={doUnassign}>
+                Move to Unassigned and remove
+              </Btn>
+            )}
+          </>
+        )
+      }
+    >
+      {error ? (
+        <div style={{ marginBottom: 12 }}>
+          <Note tone="r">{error}</Note>
+        </div>
+      ) : null}
+      {!outstandingCount ? (
+        <p style={{ margin: 0 }}>{first} will no longer be able to access this campaign or receive new calls from it.</p>
+      ) : (
+        <>
+          <Note tone="i">
+            {first} currently has {outstandingCount} active call assignment{outstandingCount === 1 ? "" : "s"} on {campaign?.name}.
+          </Note>
+          <div className="field-l" style={{ marginTop: 14, marginBottom: 6 }}>
+            What should happen to these calls?
+          </div>
+          <div className="stack-s">
+            <label className="row" style={{ cursor: "pointer" }}>
+              <input type="radio" style={{ width: "auto" }} checked={mode === "reassign"} onChange={() => setMode("reassign")} />
+              Reassign all calls to another Agent
+            </label>
+            {mode === "reassign" && (
+              <select value={to} onChange={(e) => setTo(e.target.value)} style={{ marginLeft: 22 }}>
+                <option value="">Select Agent…</option>
                 {eligible.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name}
                   </option>
                 ))}
-              </Select>
-            </div>
-          ) : (
-            <p className="text-xs text-foreground-subtle">
-              No other agents are attached to this campaign to reassign to.
-            </p>
-          )}
-          <Button variant="secondary" disabled={submitting} onClick={handleMoveToUnassigned}>
-            {submitting ? "Working..." : "Move calls to Unassigned"}
-          </Button>
-        </div>
-        <div className="flex justify-end">
-          <Button variant="secondary" disabled={submitting} onClick={onClose}>
-            Cancel
-          </Button>
-        </div>
-      </div>
+              </select>
+            )}
+            <label className="row" style={{ cursor: "pointer" }}>
+              <input type="radio" style={{ width: "auto" }} checked={mode === "unassign"} onChange={() => setMode("unassign")} />
+              Move calls to Unassigned
+            </label>
+          </div>
+        </>
+      )}
     </Modal>
   );
 }

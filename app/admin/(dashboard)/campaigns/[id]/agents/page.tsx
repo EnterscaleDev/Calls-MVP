@@ -9,9 +9,8 @@ import { Field, Input, Select } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState, InlineBanner, LoadingScreen, ErrorState } from "@/components/ui/States";
 import { AgentStatusBadge } from "@/components/ui/Badge";
-import { RemoveFromCampaignModal } from "../../../agents/_components/RemoveFromCampaignModal";
+import { RemoveFromCampaignModal, type RemoveCtx } from "../../../agents/_components/RemoveFromCampaignModal";
 import { useCampaignDetail } from "../campaign-context";
-import type { AgentProfile } from "@/lib/types";
 
 export default function CampaignAgentsPage() {
   const campaign = useCampaignDetail();
@@ -26,7 +25,7 @@ export default function CampaignAgentsPage() {
 
   const [attachAgentId, setAttachAgentId] = useState("");
   const [attachTarget, setAttachTarget] = useState(String(campaign.dailyAgentTarget || 8));
-  const [removeTarget, setRemoveTarget] = useState<AgentProfile | null>(null);
+  const [removeCtx, setRemoveCtx] = useState<RemoveCtx | null>(null);
 
   const campaignAgentRows = db
     ? db.campaignAgents
@@ -185,7 +184,11 @@ export default function CampaignAgentsPage() {
                         />
                       </td>
                       <td className="px-5 py-3 text-right">
-                        <Button variant="secondary" size="sm" onClick={() => setRemoveTarget(agent)}>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setRemoveCtx({ agent, campaignId: campaign.id })}
+                        >
                           Remove
                         </Button>
                       </td>
@@ -222,12 +225,11 @@ export default function CampaignAgentsPage() {
       </Modal>
 
       <RemoveFromCampaignModal
-        agent={removeTarget}
+        ctx={removeCtx}
         db={db}
-        fixedCampaignId={campaign.id}
-        onClose={() => setRemoveTarget(null)}
-        onRemoved={() => {
-          setRemoveTarget(null);
+        close={() => setRemoveCtx(null)}
+        toast={() => {
+          setRemoveCtx(null);
           refetch();
         }}
       />

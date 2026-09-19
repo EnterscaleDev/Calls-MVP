@@ -2,75 +2,62 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/Button";
-import { Field, Input } from "@/components/ui/Form";
-import { Modal } from "@/components/ui/Modal";
-import { InlineBanner } from "@/components/ui/States";
+import { Modal, Btn, Field, Note } from "@/components/ros/ros-ui";
 import type { AgentProfile } from "@/lib/types";
 
 type Phase = "checking" | "eligible" | "ineligible" | "error";
 
-/**
- * "Delete Agent" — never the normal way to remove a former Agent (that's
- * Remove from campaign / Deactivate). Only reachable when the agent has no
- * research history at all, re-checked server-side regardless of what the
- * eligibility pre-check said. Mirrors DeleteCampaignModal exactly.
- */
 export function DeleteAgentModal({
   agent,
-  onClose,
-  onDeleted,
+  close,
+  toast,
   onDeactivateInstead,
 }: {
   agent: AgentProfile | null;
-  onClose: () => void;
-  onDeleted: () => void;
+  close: () => void;
+  toast: (m: string) => void;
   onDeactivateInstead: (agent: AgentProfile) => void;
 }) {
-  if (!agent) return null;
-  return (
-    <DeleteAgentModalInner key={agent.id} agent={agent} onClose={onClose} onDeleted={onDeleted} onDeactivateInstead={onDeactivateInstead} />
-  );
+  if (!agent) return <Modal open={false} close={close} title="" />;
+  return <DeleteAgentModalInner key={agent.id} agent={agent} close={close} toast={toast} onDeactivateInstead={onDeactivateInstead} />;
 }
 
 function DeleteAgentModalInner({
   agent,
-  onClose,
-  onDeleted,
+  close,
+  toast,
   onDeactivateInstead,
 }: {
   agent: AgentProfile;
-  onClose: () => void;
-  onDeleted: () => void;
+  close: () => void;
+  toast: (m: string) => void;
   onDeactivateInstead: (agent: AgentProfile) => void;
 }) {
   const [phase, setPhase] = useState<Phase>("checking");
   const [reason, setReason] = useState("");
-  const [confirmText, setConfirmText] = useState("");
+  const [typed, setTyped] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     const supabase = createClient();
-    supabase
-      .rpc("admin_agent_delete_eligibility", { p_agent_id: agent.id })
-      .then(({ data, error }) => {
-        if (error || !data || data.length === 0) {
-          setPhase("error");
-          setReason(error?.message ?? "Couldn't check whether this agent can be deleted.");
-          return;
-        }
-        const row = data[0];
-        if (row.eligible) {
-          setPhase("eligible");
-        } else {
-          setPhase("ineligible");
-          setReason(row.reason ?? "This agent has research history and can't be deleted.");
-        }
-      });
+    supabase.rpc("admin_agent_delete_eligibility", { p_agent_id: agent.id }).then(({ data, error }) => {
+      if (error || !data || data.length === 0) {
+        setPhase("error");
+        setReason(error?.message ?? "Couldn't check whether this agent can be deleted.");
+        return;
+      }
+      const row = data[0];
+      if (row.eligible) {
+        setPhase("eligible");
+      } else {
+        setPhase("ineligible");
+        setReason(row.reason ?? "This agent has research history and can't be deleted.");
+      }
+    });
   }, [agent.id]);
 
-  async function handleConfirmDelete() {
+  async function confirmDelete() {
     setDeleting(true);
     setDeleteError("");
     const response = await fetch("/api/agents/delete", {
@@ -91,53 +78,42 @@ function DeleteAgentModalInner({
       setDeleteError(result.errorReason);
       return;
     }
-    onDeleted();
+    toast(agent.name + " deleted");
+    close();
   }
 
   if (phase === "checking") {
     return (
-      <Modal open onClose={onClose} title="Delete Agent?" description="Checking this agent for research history...">
-        <div className="flex justify-end">
-          <Button variant="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-        </div>
+      <Modal open close={close} title="Delete Agent?">
+        <p className="xs">Checking this agent for research history…</p>
       </Modal>
     );
   }
-
   if (phase === "error") {
     return (
-      <Modal open onClose={onClose} title="Delete Agent?">
-        <InlineBanner kind="danger">{reason}</InlineBanner>
-        <div className="mt-4 flex justify-end">
-          <Button variant="secondary" onClick={onClose}>
-            Close
-          </Button>
-        </div>
+      <Modal open close={close} title="Delete Agent?" foot={<Btn onClick={close}>Close</Btn>}>
+        <Note tone="r">{reason}</Note>
       </Modal>
     );
   }
-
   if (phase === "ineligible") {
     return (
-      <Modal open onClose={onClose} title="Delete Agent?">
-        <div className="flex flex-col gap-4">
-          <InlineBanner kind="warning">{reason}</InlineBanner>
-          <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                onDeactivateInstead(agent);
-                onClose();
-              }}
-            >
-              Deactivate Agent
-            </Button>
-          </div>
-        </div>
+      <Modal
+        open
+        close={close}
+        title="Can't delete this Agent"
+        foot={
+          <>
+            <Btn onClick={close}>Close</Btn>
+            {agent.status === "active" && (
+              <Btn k="r" onClick={() => onDeactivateInstead(agent)}>
+                Deactivate Agent
+              </Btn>
+            )}
+          </>
+        }
+      >
+        <p style={{ marginTop: 0 }}>This Agent has research history and cannot be permanently deleted. Deactivate them instead — their call history and notes stay on record.</p>
       </Modal>
     );
   }
@@ -145,27 +121,29 @@ function DeleteAgentModalInner({
   return (
     <Modal
       open
-      onClose={() => (deleting ? undefined : onClose())}
+      close={close}
       title="Delete Agent?"
-      description={`You're about to permanently remove ${agent.name} from the organisation.`}
-    >
-      <div className="flex flex-col gap-4">
-        {deleteError ? <InlineBanner kind="danger">{deleteError}</InlineBanner> : null}
-        <p className="text-xs text-foreground-subtle">
-          This should only be used for Agents created by mistake who have no research history.
-        </p>
-        <Field label={`Type "${agent.name}" to confirm`}>
-          <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} />
-        </Field>
-        <div className="flex justify-end gap-3">
-          <Button variant="secondary" disabled={deleting} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button variant="danger" disabled={deleting || confirmText !== agent.name} onClick={handleConfirmDelete}>
+      foot={
+        <>
+          <Btn onClick={close}>Cancel</Btn>
+          <Btn k="r" disabled={typed.trim() !== agent.name || deleting} onClick={confirmDelete}>
             {deleting ? "Deleting..." : "Delete Agent"}
-          </Button>
+          </Btn>
+        </>
+      }
+    >
+      {deleteError ? (
+        <div style={{ marginBottom: 12 }}>
+          <Note tone="r">{deleteError}</Note>
         </div>
-      </div>
+      ) : null}
+      <p style={{ marginTop: 0 }}>
+        You&apos;re about to permanently remove <b>{agent.name}</b> from the organisation.
+      </p>
+      <p className="xs">This should only be used for Agents created by mistake who have no research history.</p>
+      <Field l={"Type " + agent.name + " to confirm"}>
+        <input type="text" value={typed} onChange={(e) => setTyped(e.target.value)} />
+      </Field>
     </Modal>
   );
 }

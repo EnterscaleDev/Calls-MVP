@@ -2,12 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PhoneCall, ClipboardCheck, Lock, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/Button";
-import { Field, Input } from "@/components/ui/Form";
-import { Card } from "@/components/ui/Card";
-import { InlineBanner } from "@/components/ui/States";
+import { Btn, Field, Note, Icon, Chip, Kpi, Empty } from "@/components/ros/ros-ui";
 
 type Phase =
   | "loading"
@@ -16,25 +12,28 @@ type Phase =
   | "revoked"
   | "already_accepted"
   | "setup"
-  | "onboarding_welcome"
-  | "onboarding_how"
-  | "onboarding_ready";
+  | "ob1"
+  | "ob2"
+  | "ob3";
 
 interface InvitationInfo {
   agentName: string;
   organisationName: string;
   campaignNames: string[];
+  dailyTarget: number | null;
 }
 
 /**
- * Single page driving the whole post-click Agent invitation flow. There's
- * no {token} route param here — the real, single-use security token lives
- * inside the magic link Supabase's own inviteUserByEmail() sent (see
- * app/api/agents/invite/route.ts); by the time this page's client code
- * runs, supabase-js has already turned a valid link into a real session.
- * What this page adds on top is everything Supabase's own flow doesn't
- * know about: whose invitation this is, which campaigns, and the short
- * account-setup + onboarding steps before landing in the Agent workspace.
+ * Single page driving the whole post-click Agent invitation flow, reskinned
+ * to match ros-invite.jsx's AgentInviteFlow exactly (".pub-*" classes,
+ * copy, step order). There's no {token} route param here — the real,
+ * single-use security token lives inside the magic link Supabase's own
+ * inviteUserByEmail() sent (see app/api/agents/invite/route.ts); by the
+ * time this page's client code runs, supabase-js has already turned a
+ * valid link into a real session. What this page adds on top is everything
+ * Supabase's own flow doesn't know about: whose invitation this is, which
+ * campaigns, and the short account-setup + onboarding steps before landing
+ * in the Agent workspace.
  */
 export default function InviteAcceptPage() {
   const router = useRouter();
@@ -84,7 +83,15 @@ export default function InviteAcceptPage() {
         return;
       }
 
-      setInfo({ agentName: row.agent_name, organisationName: row.organisation_name, campaignNames: row.campaign_names ?? [] });
+      setInfo({
+        agentName: row.agent_name,
+        organisationName: row.organisation_name,
+        campaignNames: row.campaign_names ?? [],
+        // agent_lookup_own_invitation() doesn't expose the per-campaign
+        // daily target; the ob3 Kpi below falls back to the platform
+        // default (8) rather than showing a made-up real number.
+        dailyTarget: null,
+      });
       setName(row.agent_name);
       setPhase("setup");
     }
@@ -128,7 +135,7 @@ export default function InviteAcceptPage() {
       if (acceptError.message.includes("expired")) setPhase("expired");
       return;
     }
-    setPhase("onboarding_welcome");
+    setPhase("ob1");
   }
 
   function goToWorkspace() {
@@ -136,155 +143,235 @@ export default function InviteAcceptPage() {
     router.refresh();
   }
 
+  const fn = name.trim().split(" ")[0] || "there";
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-surface px-4 py-3 text-center">
-        <p className="text-xs font-semibold uppercase tracking-wide text-primary">Calls</p>
-      </header>
-      <div className="mx-auto w-full max-w-md px-4 py-8">
-        {phase === "loading" ? (
-          <p className="py-16 text-center text-sm text-foreground-muted">Opening your invitation...</p>
-        ) : phase === "invalid_link" ? (
-          <Card className="p-6 text-center">
-            <h1 className="text-lg font-semibold text-foreground">This invitation link isn&apos;t valid</h1>
-            <p className="mt-2 text-sm text-foreground-muted">
-              Double-check the link from your email, or ask your administrator to send a new invitation.
-            </p>
-          </Card>
-        ) : phase === "expired" ? (
-          <Card className="p-6 text-center">
-            <h1 className="text-lg font-semibold text-foreground">This invitation has expired</h1>
-            <p className="mt-2 text-sm text-foreground-muted">Ask your administrator to send a new invitation.</p>
-          </Card>
-        ) : phase === "revoked" ? (
-          <Card className="p-6 text-center">
-            <h1 className="text-lg font-semibold text-foreground">This invitation is no longer active</h1>
-            <p className="mt-2 text-sm text-foreground-muted">
-              Contact your administrator if you think this is a mistake.
-            </p>
-          </Card>
-        ) : phase === "already_accepted" ? (
-          <Card className="p-6 text-center">
-            <h1 className="text-lg font-semibold text-foreground">You&apos;ve already accepted this invitation</h1>
-            <p className="mt-2 text-sm text-foreground-muted">Sign in to get to your workspace.</p>
-            <Button className="mt-4 w-full justify-center" onClick={() => router.push("/agent/login")}>
+    <div className="ros-root pub">
+      <div className="pub-bar">
+        <div className="pub-bar-in">
+          <span className="dsp" style={{ fontSize: 14 }}>
+            Calls — Research Operations
+          </span>
+        </div>
+      </div>
+
+      {phase === "loading" && <p className="mut" style={{ marginTop: 40 }}>Opening your invitation…</p>}
+
+      {phase === "invalid_link" && (
+        <div className="pub-card">
+          <div className="pub-body" style={{ paddingTop: 26 }}>
+            <h3 style={{ fontSize: 19, marginBottom: 8 }}>This invitation link isn&apos;t valid</h3>
+            <p style={{ marginBottom: 0 }}>Double-check the link from your email, or ask your administrator to send a new invitation.</p>
+          </div>
+        </div>
+      )}
+
+      {phase === "expired" && (
+        <div className="pub-card">
+          <div className="pub-body" style={{ paddingTop: 26 }}>
+            <h3 style={{ fontSize: 19, marginBottom: 8 }}>This invitation has expired</h3>
+            <p style={{ marginBottom: 0 }}>Ask your administrator to send a new invitation.</p>
+          </div>
+        </div>
+      )}
+
+      {phase === "revoked" && (
+        <div className="pub-card">
+          <div className="pub-body" style={{ paddingTop: 26 }}>
+            <h3 style={{ fontSize: 19, marginBottom: 8 }}>This invitation is no longer active</h3>
+            <p style={{ marginBottom: 0 }}>Ask whoever invited you to send a new one.</p>
+          </div>
+        </div>
+      )}
+
+      {phase === "already_accepted" && (
+        <div className="pub-card">
+          <div className="pub-body" style={{ paddingTop: 26 }}>
+            <h3 style={{ fontSize: 19, marginBottom: 8 }}>This invitation has already been accepted</h3>
+            <p>You&apos;ve already set up your account.</p>
+            <div className="rule" />
+            <Btn k="p" onClick={() => router.push("/agent/login")}>
               Sign in
-            </Button>
-          </Card>
-        ) : phase === "setup" && info ? (
-          <Card className="p-6">
-            <h1 className="text-lg font-semibold text-foreground">You&apos;ve been invited</h1>
-            <p className="mt-1 text-sm text-foreground-muted">
-              {info.organisationName} has invited you to join as a Call Agent.
-            </p>
-            {info.campaignNames.length > 0 ? (
-              <div className="mt-3 rounded-[6px] border border-border bg-surface-muted p-3">
-                <p className="label-caps text-foreground-subtle">You&apos;ll be working on</p>
-                <ul className="mt-1.5 flex flex-col gap-1">
-                  {info.campaignNames.map((n) => (
-                    <li key={n} className="text-sm font-medium text-foreground">
-                      {n}
-                    </li>
-                  ))}
-                </ul>
+            </Btn>
+          </div>
+        </div>
+      )}
+
+      {phase === "setup" && info && (
+        <div className="pub-card">
+          <div className="pub-hero">
+            <div className="eyebrow" style={{ color: "rgba(255,255,255,.82)" }}>
+              {info.organisationName}
+            </div>
+            <h2 style={{ marginTop: 6 }}>You&apos;ve been invited</h2>
+            <div className="lede">{info.organisationName} has invited you to join as a Call Agent.</div>
+          </div>
+          <div className="pub-body">
+            {info.campaignNames.length ? (
+              <>
+                <div className="pub-sec" style={{ marginTop: 0 }}>
+                  You&apos;ll be working on
+                </div>
+                {info.campaignNames.map((n) => (
+                  <div key={n} className="gk">
+                    <span className="gk-i">
+                      <Icon n="phone" size={15} />
+                    </span>
+                    <div>
+                      <b>{n}</b>
+                      <em>Interview campaign</em>
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <Note tone="i">No campaign assigned yet — you&apos;ll see this once your administrator adds you to one.</Note>
+            )}
+            <div className="pub-sec">What you&apos;ll do</div>
+            <div className="gk">
+              <span className="gk-i">
+                <Icon n="doc" size={15} />
+              </span>
+              <div>
+                <b>View your assigned interviews</b>
+                <em>They land in one queue, in the order participants chose.</em>
+              </div>
+            </div>
+            <div className="gk">
+              <span className="gk-i">
+                <Icon n="phone" size={15} />
+              </span>
+              <div>
+                <b>Start calls from the platform</b>
+                <em>The platform connects the call — no dialling required.</em>
+              </div>
+            </div>
+            <div className="gk">
+              <span className="gk-i n">
+                <Icon n="lock" size={15} />
+              </span>
+              <div>
+                <b>Submit an outcome and notes when finished</b>
+                <em>Participant phone numbers stay private and are never shown to you.</em>
+              </div>
+            </div>
+            <div className="rule" style={{ margin: "20px 0 14px" }} />
+            {formError ? (
+              <div style={{ marginBottom: 12 }}>
+                <Note tone="r">{formError}</Note>
               </div>
             ) : null}
-
-            <form onSubmit={handleSetupSubmit} className="mt-5 flex flex-col gap-4">
-              {formError ? <InlineBanner kind="danger">{formError}</InlineBanner> : null}
-              <Field label="Full name" required>
-                <Input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+            <form onSubmit={handleSetupSubmit}>
+              <Field l="Full name">
+                <input type="text" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
               </Field>
-              <Field label="Password" required hint="At least 8 characters.">
-                <Input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="new-password"
-                />
+              <Field l="Password" hint="At least 8 characters.">
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
               </Field>
-              <Field label="Confirm password" required>
-                <Input
+              <Field l="Confirm password">
+                <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   autoComplete="new-password"
                 />
               </Field>
-              <Button type="submit" disabled={submitting} className="w-full justify-center">
+              <Btn k="p" lg type="submit" disabled={submitting} style={{ width: "100%", justifyContent: "center", marginTop: 6 }}>
                 {submitting ? "Setting up..." : "Create account & continue"}
-              </Button>
+              </Btn>
             </form>
-          </Card>
-        ) : phase === "onboarding_welcome" && info ? (
-          <Card className="p-6 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary-soft text-primary">
-              <CheckCircle2 size={24} />
+          </div>
+        </div>
+      )}
+
+      {phase === "ob1" && info && (
+        <div className="pub-card">
+          <div className="pub-hero" style={{ background: "var(--navy)" }}>
+            <div className="eyebrow" style={{ color: "rgba(255,255,255,.82)" }}>
+              Step 1 of 3
             </div>
-            <h1 className="mt-3 text-lg font-semibold text-foreground">Welcome, {name.split(" ")[0]}</h1>
-            <p className="mt-1 text-sm text-foreground-muted">
-              You&apos;ve joined {info.organisationName} as a Call Agent.
-            </p>
-            {info.campaignNames.length > 0 ? (
-              <p className="mt-2 text-sm text-foreground">
-                Assigned: <span className="font-medium">{info.campaignNames.join(", ")}</span>
-              </p>
-            ) : null}
-            <Button className="mt-5 w-full justify-center" onClick={() => setPhase("onboarding_how")}>
+            <h2 style={{ marginTop: 6 }}>Welcome, {fn}</h2>
+          </div>
+          <div className="pub-body" style={{ paddingTop: 26 }}>
+            <p>You&apos;ve joined {info.organisationName} as a Call Agent.</p>
+            {!!info.campaignNames.length && (
+              <div className="row wrap" style={{ gap: 6, marginBottom: 14 }}>
+                {info.campaignNames.map((n) => (
+                  <Chip key={n} tone="i">
+                    {n}
+                  </Chip>
+                ))}
+              </div>
+            )}
+            <Btn k="p" lg style={{ width: "100%", justifyContent: "center" }} onClick={() => setPhase("ob2")}>
               Continue
-            </Button>
-          </Card>
-        ) : phase === "onboarding_how" ? (
-          <Card className="p-6">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-navy-soft text-navy">
-              <PhoneCall size={22} />
+            </Btn>
+          </div>
+        </div>
+      )}
+
+      {phase === "ob2" && (
+        <div className="pub-card">
+          <div className="pub-hero" style={{ background: "var(--navy)" }}>
+            <div className="eyebrow" style={{ color: "rgba(255,255,255,.82)" }}>
+              Step 2 of 3
             </div>
-            <h1 className="mt-3 text-center text-lg font-semibold text-foreground">How your calls work</h1>
-            <ol className="mt-4 flex flex-col gap-3 text-sm text-foreground">
-              <li className="flex gap-2.5">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
-                  1
-                </span>
-                Open an assigned interview.
-              </li>
-              <li className="flex gap-2.5">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
-                  2
-                </span>
-                Start the call from the platform.
-              </li>
-              <li className="flex gap-2.5">
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
-                  3
-                </span>
-                Submit an outcome and notes when finished.
-              </li>
-            </ol>
-            <div className="mt-4 flex items-start gap-2.5 rounded-[6px] border border-navy/20 bg-navy-soft p-3">
-              <Lock size={16} className="mt-0.5 shrink-0 text-navy" />
-              <p className="text-xs text-navy">
-                Participant phone numbers remain private and are not displayed to Agents.
-              </p>
+            <h2 style={{ marginTop: 6 }}>How your calls work</h2>
+          </div>
+          <div className="pub-body" style={{ paddingTop: 26 }}>
+            <div className="gk">
+              <span className="gk-i">1</span>
+              <div>
+                <b>Open an assigned interview.</b>
+              </div>
             </div>
-            <Button className="mt-5 w-full justify-center" onClick={() => setPhase("onboarding_ready")}>
+            <div className="gk">
+              <span className="gk-i">2</span>
+              <div>
+                <b>Start the call from the platform.</b>
+              </div>
+            </div>
+            <div className="gk">
+              <span className="gk-i">3</span>
+              <div>
+                <b>Submit an outcome and notes when finished.</b>
+              </div>
+            </div>
+            <div style={{ marginTop: 4 }}>
+              <Note tone="i">Participant phone numbers remain private and are not displayed to Agents.</Note>
+            </div>
+            <Btn k="p" lg style={{ width: "100%", justifyContent: "center", marginTop: 16 }} onClick={() => setPhase("ob3")}>
               Continue
-            </Button>
-          </Card>
-        ) : phase === "onboarding_ready" ? (
-          <Card className="p-6 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary-soft text-primary">
-              <ClipboardCheck size={24} />
+            </Btn>
+          </div>
+        </div>
+      )}
+
+      {phase === "ob3" && info && (
+        <div className="pub-card">
+          <div className="pub-body" style={{ paddingTop: 26 }}>
+            <div className="row" style={{ gap: 13, marginBottom: 18 }}>
+              <span className="tick">
+                <Icon n="check" size={20} />
+              </span>
+              <div>
+                <h3 style={{ fontSize: 19 }}>You&apos;re ready</h3>
+              </div>
             </div>
-            <h1 className="mt-3 text-lg font-semibold text-foreground">You&apos;re ready</h1>
-            <p className="mt-2 text-sm text-foreground-muted">
-              Head to your workspace to see what&apos;s assigned to you today.
-            </p>
-            <Button className="mt-5 w-full justify-center" onClick={goToWorkspace}>
-              Go to today&apos;s calls
-            </Button>
-          </Card>
-        ) : null}
-      </div>
+            {info.campaignNames.length ? (
+              <div className="grid g2 sec" style={{ gap: 10 }}>
+                <Kpi l="Assigned campaigns" v={info.campaignNames.length} />
+                <Kpi l="Daily target" v={info.dailyTarget || 8} />
+              </div>
+            ) : (
+              <Empty head="No calls assigned yet">You&apos;re all set. Your administrator hasn&apos;t assigned any interviews to you yet.</Empty>
+            )}
+            <Btn k="p" lg style={{ width: "100%", justifyContent: "center", marginTop: 6 }} onClick={goToWorkspace}>
+              {info.campaignNames.length ? "Go to today's calls" : "Go to Agent Home"}
+            </Btn>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
