@@ -2,15 +2,16 @@
  * (Research Ops Platform design system), for the Agent Lifecycle & Invite
  * screens only. Every token, class, spacing, and color value below is
  * unchanged from the source — the only edits are: font-family swapped to
- * this app's Manrope/Bricolage Grotesque (per explicit direction, the
- * source file itself used Barlow/Space Grotesk), and the handful of bare
- * element selectors (body, a, button, h1-h4, form inputs, ::selection)
- * scoped under .ros-root so they don't leak into the rest of the app's
- * unrelated Tailwind-based pages. Every class-based rule (.btn, .card,
- * .ch-*, .modal, etc.) is untouched and needs no wrapper to be safe. */
+ * this app's Geist Sans body / Bricolage Grotesque display type (per
+ * explicit direction — the source file itself used Barlow/Space Grotesk),
+ * and the handful of bare element selectors (body, a, button, h1-h4, form
+ * inputs, ::selection) scoped under .ros-root so they don't leak into the
+ * rest of the app's unrelated Tailwind-based pages. Every class-based rule
+ * (.btn, .card, .ch-*, .modal, etc.) is untouched and needs no wrapper to
+ * be safe. */
 
 :root{--o:#FF5100;--o-soft:#FFF1EA;--o-line:#FFD2BD;--navy:#19384D;--navy-2:#22475F;--teal:#008D9D;--teal-soft:#E6F4F5;--ink:#191F24;--bg:#F7F6F4;--card:#fff;--line:#E7E3DF;--line-2:#F0EDE9;--mut:#5C5854;--mut-2:#6B6763;--red:#C0392B;--red-soft:#FCECEA;--sand:#9A6B00;--sand-soft:#FCF3E0;--grey:#CAC9CA;--r:6px;--sb:236px}
-.ros-root{font-family:var(--font-manrope),system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.ros-root{font-family:var(--font-geist-sans),system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
 .ros-root a{color:var(--o);text-decoration:none}.ros-root a:hover{color:var(--navy)}
 .ros-root button{font:inherit;cursor:pointer}
 .ros-root h1,.ros-root h2,.ros-root h3,.ros-root h4{margin:0;font-family:var(--font-bricolage),sans-serif;font-weight:700;letter-spacing:-.022em}

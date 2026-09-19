@@ -70,7 +70,8 @@
   --color-danger-soft: var(--danger-soft);
   --color-neutral-soft: var(--neutral-soft);
 
-  --font-sans: var(--font-manrope);
+  --font-sans: var(--font-geist-sans);
+  --font-display: var(--font-bricolage);
 }
 
 body {
@@ -83,6 +84,10 @@ body {
   border-color: var(--color-border);
 }
 
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+}
+
 /*
  * Type scale. A handful of roles, reused everywhere instead of one-off
  * Tailwind text-size/weight combinations per component — the goal is
@@ -91,6 +96,7 @@ body {
  * doesn't read as one flat size everywhere.
  */
 .text-page-title {
+  font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
   font-size: 1.75rem; /* 28px */
   font-weight: 700;
   letter-spacing: -0.01em;
