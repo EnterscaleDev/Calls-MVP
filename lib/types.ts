@@ -28,6 +28,7 @@ export interface Campaign {
   incentiveTitle: string;
   incentiveDescription: string;
   senderId: string;
+  invitationMessageBody?: string;
   recordingEnabled: boolean;
   sendBookingConfirmation: boolean;
   sendReminder24h: boolean;

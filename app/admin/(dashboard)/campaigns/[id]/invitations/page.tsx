@@ -25,12 +25,17 @@ export default function InvitationsPage() {
   const { data: db, loading, error, refetch } = useAdminData();
 
   const [senderId, setSenderId] = useState(campaign.senderId);
-  const [body, setBody] = useState(DEFAULT_BODY);
+  const [body, setBody] = useState(campaign.invitationMessageBody ?? DEFAULT_BODY);
   const [incentiveText, setIncentiveText] = useState(
     campaign.incentiveTitle ? `${campaign.incentiveTitle} — ${campaign.incentiveDescription}` : ""
   );
   const [draftSaved, setDraftSaved] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftError, setDraftError] = useState("");
+  const [testPhone, setTestPhone] = useState("");
   const [testSent, setTestSent] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
+  const [testError, setTestError] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [sendMode, setSendMode] = useState<"new" | "failed">("new");
   const [sending, setSending] = useState(false);
@@ -105,16 +110,58 @@ export default function InvitationsPage() {
         ? "Activate this campaign before sending invitations."
         : "This campaign isn't active — new invitations can't be sent.";
 
-  function handleSaveDraft() {
-    // No real draft storage exists yet (matches the mock, which never
-    // persisted this either) — purely a local acknowledgment.
+  async function handleSaveDraft() {
+    setSavingDraft(true);
+    setDraftError("");
+    const supabase = createClient();
+    const { error: rpcError } = await supabase.rpc("admin_save_invitation_draft", {
+      p_campaign_id: campaign.id,
+      p_sender_id: senderId,
+      p_body: body,
+    });
+    setSavingDraft(false);
+    if (rpcError) {
+      setDraftError(rpcError.message);
+      return;
+    }
+    await refetch();
     setDraftSaved(true);
     setTimeout(() => setDraftSaved(false), 2500);
   }
 
-  function handleSendTest() {
-    setTestSent(true);
-    setTimeout(() => setTestSent(false), 2500);
+  async function handleSendTest() {
+    const to = testPhone.trim();
+    if (!to) {
+      setTestError("Enter a phone number to send the test to.");
+      return;
+    }
+    setSendingTest(true);
+    setTestError("");
+    try {
+      const requestId = `test-${campaign.id}-${crypto.randomUUID()}`;
+      const testBody = (incentiveText ? `${body}\n\n${incentiveText}` : body)
+        .replaceAll("{{first_name}}", "there")
+        .replaceAll("{{campaign_link}}", "https://calls.example/i/test");
+      const response = await fetch("/api/sms/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to, body: testBody, requestId, senderMask: senderId }),
+      });
+      const result = (await response.json().catch(() => ({
+        ok: false,
+        errorReason: "Unexpected response from the send endpoint.",
+      }))) as { ok: true } | { ok: false; errorReason: string };
+      if (!result.ok) {
+        setTestError(result.errorReason);
+        return;
+      }
+      const supabase = createClient();
+      await supabase.rpc("log_invitation_test_sent", { p_campaign_id: campaign.id, p_to: to });
+      setTestSent(true);
+      setTimeout(() => setTestSent(false), 2500);
+    } finally {
+      setSendingTest(false);
+    }
   }
 
   async function handleConfirmSend() {
@@ -283,7 +330,9 @@ export default function InvitationsPage() {
           <CardHeader title="Compose invitation" description="Supports {{first_name}} and {{campaign_link}} placeholders." />
           <CardBody className="flex flex-col gap-4">
             {draftSaved ? <InlineBanner kind="success">Draft saved.</InlineBanner> : null}
-            {testSent ? <InlineBanner kind="success">Test sent to your own number.</InlineBanner> : null}
+            {draftError ? <InlineBanner kind="danger">{draftError}</InlineBanner> : null}
+            {testSent ? <InlineBanner kind="success">Test message sent to {testPhone}.</InlineBanner> : null}
+            {testError ? <InlineBanner kind="danger">{testError}</InlineBanner> : null}
             {sentBanner ? <InlineBanner kind="success">{sentBanner}</InlineBanner> : null}
             {sendError ? <InlineBanner kind="danger">{sendError}</InlineBanner> : null}
 
@@ -299,13 +348,22 @@ export default function InvitationsPage() {
             <Field label="Incentive text">
               <Input value={incentiveText} onChange={(e) => setIncentiveText(e.target.value)} />
             </Field>
+            <Field label="Test phone number" hint="Sends one real SMS via the live provider to this number.">
+              <Input
+                type="tel"
+                placeholder="+2348012345678"
+                value={testPhone}
+                onChange={(e) => setTestPhone(e.target.value)}
+                className="max-w-xs"
+              />
+            </Field>
 
             <div className="flex flex-wrap justify-end gap-3">
-              <Button variant="secondary" onClick={handleSaveDraft}>
-                Save Draft
+              <Button variant="secondary" disabled={savingDraft} onClick={handleSaveDraft}>
+                {savingDraft ? "Saving..." : "Save Draft"}
               </Button>
-              <Button variant="secondary" onClick={handleSendTest}>
-                Send Test
+              <Button variant="secondary" disabled={sendingTest || !testPhone.trim()} onClick={handleSendTest}>
+                {sendingTest ? "Sending..." : "Send Test"}
               </Button>
               {failedParticipants.length > 0 ? (
                 <Button

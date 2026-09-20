@@ -26,6 +26,8 @@ const ACTION_LABELS: Record<string, string> = {
   credits_topped_up: "Credits topped up",
   contacts_imported: "Contacts imported",
   invitation_sent: "Invitation sent",
+  invitation_draft_saved: "Invitation draft saved",
+  invitation_test_sent: "Test invitation sent",
   sms_batch_sent: "SMS batch sent",
   consent_recorded: "Consent recorded",
   booking_created: "Booking created",

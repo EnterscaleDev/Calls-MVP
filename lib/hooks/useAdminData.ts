@@ -57,6 +57,7 @@ function mapCampaign(row: CampaignRow): Campaign {
     incentiveTitle: row.incentive_title,
     incentiveDescription: row.incentive_description,
     senderId: row.sender_id,
+    invitationMessageBody: row.invitation_message_body ?? undefined,
     recordingEnabled: row.recording_enabled,
     sendBookingConfirmation: row.send_booking_confirmation,
     sendReminder24h: row.send_reminder_24h,
