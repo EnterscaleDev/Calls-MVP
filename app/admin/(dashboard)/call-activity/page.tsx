@@ -5,7 +5,7 @@ import { LoadingScreen, ErrorState } from "@/components/ui/States";
 import { CallActivityBoard } from "../_lib/CallActivityBoard";
 
 export default function CallActivityPage() {
-  const { data: db, loading, error } = useAdminData();
+  const { data: db, loading, error, refetch } = useAdminData();
   if (loading || !db) return <LoadingScreen label="Loading call activity..." />;
   if (error) return <ErrorState title="Couldn't load call activity" description={error} />;
 
@@ -17,7 +17,7 @@ export default function CallActivityPage() {
           Every call attempt across every campaign.
         </p>
       </div>
-      <CallActivityBoard db={db} />
+      <CallActivityBoard db={db} refetch={refetch} />
     </div>
   );
 }

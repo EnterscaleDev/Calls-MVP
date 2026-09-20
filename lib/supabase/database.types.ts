@@ -1308,6 +1308,14 @@ export type Database = {
           total_count: number
         }[]
       }
+      admin_log_recording_accessed: {
+        Args: { p_recording_id: string }
+        Returns: undefined
+      }
+      admin_log_recording_uploaded: {
+        Args: { p_call_attempt_id: string; p_campaign_id: string }
+        Returns: undefined
+      }
       admin_reactivate_agent: {
         Args: { p_agent_id: string }
         Returns: undefined

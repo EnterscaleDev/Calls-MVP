@@ -2,13 +2,15 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Download } from "lucide-react";
+import { Download, Paperclip, Play } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { getCallAttemptsForCampaign, getRecordingForAttempt, getCampaign } from "@/lib/selectors";
 import { Card, CardHeader, CardBody, StatCard } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Form";
 import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/States";
+import { EmptyState, InlineBanner } from "@/components/ui/States";
 import { OutcomeBadge, Badge } from "@/components/ui/Badge";
+import { AttachRecordingModal } from "./AttachRecordingModal";
 import { formatDateTime, formatDuration, safeDiv, formatPercent, isToday, labelize } from "./format";
 import type {
   Campaign,
@@ -47,14 +49,43 @@ export interface CallActivityBoardData {
 export function CallActivityBoard({
   db,
   campaignId,
+  refetch,
 }: {
   db: CallActivityBoardData;
   campaignId?: string;
+  refetch: () => void | Promise<void>;
 }) {
   const [agentFilter, setAgentFilter] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState("");
   const [dateFilter, setDateFilter] = useState<"all" | "today">("all");
   const [campaignFilter, setCampaignFilter] = useState("");
+  const [attachTarget, setAttachTarget] = useState<{ campaignId: string; callAttemptId: string } | null>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [playError, setPlayError] = useState("");
+
+  async function handlePlay(recordingId: string, storageReference: string) {
+    setPlayingId(recordingId);
+    setPlayError("");
+    // Open the tab synchronously, inside the click's user-activation window —
+    // by the time the signed URL comes back from two awaited calls below,
+    // most browsers no longer treat window.open() as user-initiated and
+    // silently block it. Redirecting an already-open blank tab sidesteps that.
+    const tab = window.open("", "_blank", "noopener,noreferrer");
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.storage
+        .from("call-recordings")
+        .createSignedUrl(storageReference, 60);
+      if (error || !data) throw error ?? new Error("Couldn't get a link for this recording.");
+      await supabase.rpc("admin_log_recording_accessed", { p_recording_id: recordingId });
+      if (tab) tab.location.href = data.signedUrl;
+    } catch (err) {
+      tab?.close();
+      setPlayError(err instanceof Error ? err.message : "Couldn't open this recording.");
+    } finally {
+      setPlayingId(null);
+    }
+  }
 
   const scopeCampaignId = campaignId ?? (campaignFilter || undefined);
 
@@ -182,6 +213,7 @@ export function CallActivityBoard({
 
   return (
     <div className="flex flex-col gap-5">
+      {playError ? <InlineBanner kind="danger">{playError}</InlineBanner> : null}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Calls today" value={callsToday} />
         <StatCard label="Calls attempted" value={callsAttempted} />
@@ -319,7 +351,26 @@ export function CallActivityBoard({
                       <td className="px-5 py-3 tabular-nums text-foreground-muted">{formatDuration(row.duration)}</td>
                       <td className="px-5 py-3">
                         {row.recording ? (
-                          <Badge tone={RECORDING_TONE[row.recording.status]}>{labelize(row.recording.status)}</Badge>
+                          <button
+                            type="button"
+                            onClick={() => handlePlay(row.recording!.id, row.recording!.storageReference)}
+                            disabled={playingId === row.recording.id}
+                            className="inline-flex items-center gap-1.5 hover:underline disabled:opacity-60"
+                          >
+                            <Play size={12} className="text-foreground-subtle" />
+                            <Badge tone={RECORDING_TONE[row.recording.status]}>{labelize(row.recording.status)}</Badge>
+                          </button>
+                        ) : row.lastAttempt ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAttachTarget({ campaignId: row.campaignId ?? campaignId!, callAttemptId: row.lastAttempt!.id })
+                            }
+                            className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground-muted hover:text-primary hover:underline"
+                          >
+                            <Paperclip size={12} />
+                            Attach
+                          </button>
                         ) : (
                           <span className="text-foreground-subtle">—</span>
                         )}
@@ -335,6 +386,16 @@ export function CallActivityBoard({
           )}
         </CardBody>
       </Card>
+
+      {attachTarget ? (
+        <AttachRecordingModal
+          open={attachTarget !== null}
+          onClose={() => setAttachTarget(null)}
+          campaignId={attachTarget.campaignId}
+          callAttemptId={attachTarget.callAttemptId}
+          onUploaded={() => refetch()}
+        />
+      ) : null}
     </div>
   );
 }

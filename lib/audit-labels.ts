@@ -2,6 +2,7 @@
 // same action vocabulary either way.
 export const SENSITIVE_ACTIONS = new Set([
   "recording_accessed",
+  "recording_uploaded",
   "data_exported",
   "contact_numbers_revealed",
 ]);
@@ -44,6 +45,8 @@ const ACTION_LABELS: Record<string, string> = {
   participant_reassigned: "Participant reassigned",
   call_initiated: "Call initiated",
   call_outcome_submitted: "Call outcome submitted",
+  recording_uploaded: "Recording attached",
+  recording_accessed: "Recording played",
 };
 
 function labelize(action: string): string {

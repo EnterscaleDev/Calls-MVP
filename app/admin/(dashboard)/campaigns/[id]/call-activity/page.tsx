@@ -7,10 +7,10 @@ import { useCampaignDetail } from "../campaign-context";
 
 export default function CampaignCallActivityPage() {
   const campaign = useCampaignDetail();
-  const { data: db, loading, error } = useAdminData();
+  const { data: db, loading, error, refetch } = useAdminData();
 
   if (loading || !db) return <LoadingScreen label="Loading call activity..." />;
   if (error) return <ErrorState title="Couldn't load call activity" description={error} />;
 
-  return <CallActivityBoard db={db} campaignId={campaign.id} />;
+  return <CallActivityBoard db={db} campaignId={campaign.id} refetch={refetch} />;
 }
