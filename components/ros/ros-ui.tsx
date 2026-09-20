@@ -261,6 +261,61 @@ export function Sel({
   );
 }
 
+/** Pagination footer matching the ros design system — not part of the
+ *  original prototype (it had no server-paginated tables), built to match
+ *  its spacing/type conventions rather than pulling in components/ui's
+ *  Tailwind-based Pagination, which would visually collide with ros.css's
+ *  scoped bare-element rules if rendered inside .ros-root. */
+export function Pager({
+  page,
+  pageSize,
+  totalCount,
+  onPageChange,
+  onPageSizeChange,
+  pageSizeOptions = [20, 50, 100],
+}: {
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
+  pageSizeOptions?: number[];
+}) {
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const start = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, totalCount);
+  return (
+    <div className="spread" style={{ padding: "10px 14px", borderTop: "1px solid var(--line)" }}>
+      <span className="xs">{totalCount === 0 ? "No results" : `${start}–${end} of ${totalCount}`}</span>
+      <div className="row" style={{ gap: 12 }}>
+        {onPageSizeChange ? (
+          <div className="row" style={{ gap: 6 }}>
+            <span className="xs">Rows per page</span>
+            <select className="inline-sel" style={{ minWidth: 64 }} value={pageSize} onChange={(e) => onPageSizeChange(Number(e.target.value))}>
+              {pageSizeOptions.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+        <div className="row" style={{ gap: 8 }}>
+          <Btn sm disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+            Previous
+          </Btn>
+          <span className="xs mono">
+            Page {page} of {totalPages}
+          </span>
+          <Btn sm disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+            Next
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Field({ l, hint, children }: { l: ReactNode; hint?: ReactNode; children: ReactNode }) {
   return (
     <label className="field">

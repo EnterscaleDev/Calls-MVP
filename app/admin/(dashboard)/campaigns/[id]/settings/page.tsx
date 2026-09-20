@@ -4,17 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAdminData } from "@/lib/hooks/useAdminData";
-import { getAuditLog } from "@/lib/selectors";
-import { SENSITIVE_ACTIONS, ACCESS_ACTIONS, describeAction } from "@/lib/audit-labels";
 import { Card, CardHeader, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Field, Select } from "@/components/ui/Form";
-import { CampaignStatusBadge, Badge } from "@/components/ui/Badge";
-import { EmptyState, LoadingScreen, ErrorState, InlineBanner } from "@/components/ui/States";
+import { CampaignStatusBadge } from "@/components/ui/Badge";
+import { LoadingScreen, ErrorState, InlineBanner } from "@/components/ui/States";
 import { formatDateTime } from "../../../_lib/format";
 import { useCampaignDetail } from "../campaign-context";
 import { DeleteCampaignModal } from "../../_components/DeleteCampaignModal";
 import { ReminderSettingsCard } from "./_components/ReminderSettingsCard";
+import { CampaignAuditCard } from "./_components/CampaignAuditCard";
 import type { Campaign, CampaignStatus } from "@/lib/types";
 
 export default function CampaignSettingsPage() {
@@ -28,7 +27,6 @@ export default function CampaignSettingsPage() {
   if (loading || !db) return <LoadingScreen label="Loading settings..." />;
   if (error) return <ErrorState title="Couldn't load settings" description={error} />;
 
-  const auditEvents = getAuditLog(db, campaign.id);
   // useCampaignDetail() comes from the layout's own separate useAdminData()
   // call, so it won't reflect writes made through this page's refetch() —
   // fall back to this page's own fresher copy for the fields this page
@@ -180,36 +178,7 @@ export default function CampaignSettingsPage() {
 
       <ReminderSettingsCard campaign={liveCampaign} onSaved={refetch} />
 
-      <Card>
-        <CardHeader title="Campaign audit" description="Every recorded action for this campaign, most recent first." />
-        <CardBody className="p-0">
-          {auditEvents.length === 0 ? (
-            <div className="p-5">
-              <EmptyState title="Nothing logged yet" description="Actions on this campaign will appear here." />
-            </div>
-          ) : (
-            <ul className="divide-y divide-border">
-              {auditEvents.map((event) => (
-                <li key={event.id} className="flex items-start justify-between gap-3 px-5 py-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-foreground">{describeAction(event.action)}</p>
-                      {ACCESS_ACTIONS.has(event.action) ? <Badge tone="info">Access</Badge> : null}
-                      {SENSITIVE_ACTIONS.has(event.action) ? <Badge tone="danger">Sensitive</Badge> : null}
-                    </div>
-                    <p className="text-xs text-foreground-muted">
-                      {event.entityType.replace(/_/g, " ")} · {event.actorName}
-                    </p>
-                  </div>
-                  <p className="whitespace-nowrap text-xs text-foreground-subtle">
-                    {formatDateTime(event.createdAt)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardBody>
-      </Card>
+      <CampaignAuditCard campaignId={campaign.id} />
 
       {liveCampaign.status !== "archived" ? (
         <Card>

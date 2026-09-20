@@ -618,6 +618,7 @@ export type Database = {
           id: string
           incentive_description: string
           incentive_title: string
+          invitation_message_body: string | null
           name: string
           organisation_id: string
           recording_enabled: boolean
@@ -652,6 +653,7 @@ export type Database = {
           id?: string
           incentive_description?: string
           incentive_title?: string
+          invitation_message_body?: string | null
           name: string
           organisation_id: string
           recording_enabled?: boolean
@@ -686,6 +688,7 @@ export type Database = {
           id?: string
           incentive_description?: string
           incentive_title?: string
+          invitation_message_body?: string | null
           name?: string
           organisation_id?: string
           recording_enabled?: boolean
@@ -1284,6 +1287,27 @@ export type Database = {
         Args: { p_auth_user_id: string; p_invitation_id: string }
         Returns: undefined
       }
+      admin_list_agents_page: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: {
+          agent_id: string
+          calls_today: number
+          campaign_names: string[]
+          completed_this_week: number
+          daily_target: number
+          email: string
+          kind: string
+          last_active_at: string
+          name: string
+          row_status: string
+          total_count: number
+        }[]
+      }
       admin_reactivate_agent: {
         Args: { p_agent_id: string }
         Returns: undefined
@@ -1319,6 +1343,10 @@ export type Database = {
           agent_profile_id: string
           auth_user_id: string
         }[]
+      }
+      admin_save_invitation_draft: {
+        Args: { p_body: string; p_campaign_id: string; p_sender_id: string }
+        Returns: undefined
       }
       admin_unassign_campaign_agent_work: {
         Args: { p_agent_id: string; p_campaign_id: string }
@@ -1514,6 +1542,10 @@ export type Database = {
       }
       fn_schedule_appointment_reminders: {
         Args: { p_booking_id: string }
+        Returns: undefined
+      }
+      log_invitation_test_sent: {
+        Args: { p_campaign_id: string; p_to: string }
         Returns: undefined
       }
       log_sms_batch_sent: {
