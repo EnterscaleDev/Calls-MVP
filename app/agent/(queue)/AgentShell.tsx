@@ -30,8 +30,9 @@ export function AgentShell({
       {!inCall && (
         <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3">
           <div>
-            <p className="text-sm font-semibold text-foreground">Calls Ops</p>
-            <p className="text-xs text-foreground-muted">{agentName}</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/enterscale-logo.png" alt="Enterscale" className="h-4 w-auto" />
+            <p className="mt-1 text-xs text-foreground-muted">{agentName}</p>
           </div>
           <button
             type="button"

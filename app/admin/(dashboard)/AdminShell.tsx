@@ -64,8 +64,8 @@ export function AdminShell({
     <div className="flex min-h-screen bg-background">
       <aside className="hidden w-56 shrink-0 bg-navy md:flex md:flex-col">
         <div className="px-5 py-5">
-          <p className="text-sm font-semibold text-white">Calls Ops</p>
-          <p className="text-xs text-white/60">Research operations</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/enterscale-logo.png" alt="Enterscale" className="h-5 w-auto brightness-0 invert" />
         </div>
         <nav className="flex flex-1 flex-col gap-0.5 px-3">
           {NAV.map((item) => {
@@ -92,7 +92,8 @@ export function AdminShell({
 
       <div className="flex min-h-screen flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:px-6">
-          <div className="md:hidden text-sm font-semibold">Calls Ops</div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/enterscale-logo.png" alt="Enterscale" className="h-4 w-auto md:hidden" />
           <div />
           <div className="flex items-center gap-2">
             {credits ? (
