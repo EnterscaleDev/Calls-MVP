@@ -6,7 +6,9 @@ export default function Home() {
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col items-center justify-center gap-8 px-6 py-16">
       <div className="text-center">
-        <p className="text-xs font-semibold uppercase tracking-wide text-primary">Calls MVP</p>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/enterscale-logo.png" alt="Enterscale" className="mx-auto h-8 w-auto" />
+        <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-primary">Calls MVP</p>
         <h1 className="mt-2 text-2xl font-semibold text-foreground">Research operations, telephone interviews</h1>
         <p className="mx-auto mt-2 max-w-md text-sm text-foreground-muted">
           A prototype vertical slice: create a campaign, invite participants by SMS, book interviews,
