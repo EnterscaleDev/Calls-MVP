@@ -6,26 +6,29 @@ import { createServiceClient } from "@/lib/supabase/service";
  * session exists here, so this runs under the service-role client (same
  * trust boundary as app/api/sms/dotgo-callback/route.ts).
  *
- * CONFIRMED NOT WORKING: tested against a real, fully successful, completed
- * two-party bridge call (both legs rang, both sides actually spoke) with
- * callBackUrl set to this route on every request — nothing ever arrived.
- * SMSala's callBackUrl mechanism simply doesn't fire for Voice Bridge,
- * regardless of outcome. This route is kept in case that changes on their
- * end (worth asking their support directly), but nothing in the app may
- * depend on it actually being called — see the call workspace's polling
- * fallback (app/agent/(queue)/call/[assignmentId]/page.tsx), which treats
- * a successful bridge submission as sufficient evidence the call is
- * connected after a short grace period, specifically because of this gap.
+ * UPDATE: the "confirmed not working" conclusion below turned out to be
+ * wrong. An earlier real-call test never arrived, but that test's
+ * callBackUrl pointed at http://localhost:3000 (from .env.local) — not
+ * reachable from SMSala's servers at all, which fully explains the silence
+ * on its own. A follow-up manual test (asking SMSala's own team to hit a
+ * reachable endpoint directly, not through this app) confirmed the
+ * callback genuinely fires, with this real payload shape:
+ *   { voiceResponseId, callSubmitted, clientUniqueId, dtmfResponse,
+ *     callStatusCode, callCost, remarks }
+ * — camelCase, matching the lowercase fallback fields already handled
+ * below. NORMAL_CLEARING + a numeric callCost was the observed "call ended
+ * normally" case, which maps to "ended" here correctly.
  *
- * The status-mapping logic below is unverified for the same reason (no
- * real payload has ever been observed to test it against) — it's a
- * best-effort guess based only on the synchronous VoiceBridge response
- * shape (VoiceResponseId, CallSubmitted, ClientUniqueId, DtmfResponse,
- * CallStatusCode, CallCost, Remarks), which SMSala's docs don't confirm the
- * callback reuses.
- *
- * Correlates to a call_attempts row via ClientUniqueId, which
- * app/api/voice/bridge/route.ts sets to the attempt's own id.
+ * STILL UNVERIFIED: that test's clientUniqueId came back null, because it
+ * was a manual SMSala-side test that never set one — so whether a real
+ * clientUniqueId (as app/api/voice/bridge/route.ts always sends, set to
+ * the call_attempts row's own id) actually round-trips back on a callback
+ * from a real app-originated call is still unconfirmed. Until that's
+ * tested end-to-end, treat correlation as the remaining open question, not
+ * delivery — the call workspace's polling fallback
+ * (app/agent/(queue)/call/[assignmentId]/page.tsx) should stay in place
+ * either way, since it's needed for calls that finish inside the poll
+ * window even once the webhook is fully trusted.
  */
 
 interface SmsalaCallbackPayload {

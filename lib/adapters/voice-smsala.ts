@@ -15,9 +15,10 @@ import "server-only";
  *     rejects that and wants a plain object instead.
  *  2. `callBackUrl` is documented as optional but the API rejects a request
  *     without one — always sent here.
- * Still unconfirmed: the *response* to this endpoint does come back as an
- * array (matching the doc), but the async callBackUrl payload shape isn't
- * documented at all — see app/api/voice/smsala-callback/route.ts.
+ * The *response* to this endpoint comes back as an array (matching the
+ * doc). The async callBackUrl payload shape isn't documented anywhere, but
+ * is now confirmed by a real captured example — see
+ * app/api/voice/smsala-callback/route.ts.
  */
 
 const SMSALA_BASE_URL = "https://api2.smsala.com/api";
