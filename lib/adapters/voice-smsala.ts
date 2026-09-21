@@ -95,3 +95,54 @@ export async function bridgeCall(input: BridgeCallInput): Promise<BridgeCallResu
 
   return { ok: true };
 }
+
+export type SmsalaBalanceResult =
+  | { ok: true; company: string; balance: number; creditLimit: number }
+  | { ok: false; errorReason: string };
+
+/**
+ * Real SMSala account balance — CheckBalance, confirmed against the real
+ * account (not in the Voice API doc; found by probing api2.smsala.com).
+ * Two things confirmed live, not guessed:
+ *  1. It's a plain GET at https://api2.smsala.com/CheckBalance?apiToken=...
+ *     — no "/api" prefix (unlike VoiceBridge/VoiceFile/etc.), no Basic Auth.
+ *  2. It takes a *separate* account-level token from SMSALA_AUTH_TOKEN (the
+ *     Voice Connection's Basic Auth secret) — SMSala's dashboard has a
+ *     distinct "Manage API" section (under Send SMS) issuing its own
+ *     per-endpoint tokens with their own IP allowlist. SMSALA_ACCOUNT_TOKEN
+ *     here is that token, not the Voice one.
+ */
+export async function getSmsalaBalance(): Promise<SmsalaBalanceResult> {
+  const accountToken = process.env.SMSALA_ACCOUNT_TOKEN;
+  if (!accountToken) {
+    return { ok: false, errorReason: "SMSala isn't configured — set SMSALA_ACCOUNT_TOKEN." };
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`https://api2.smsala.com/CheckBalance?apiToken=${encodeURIComponent(accountToken)}`);
+  } catch (error) {
+    return {
+      ok: false,
+      errorReason: error instanceof Error ? error.message : "Network error contacting SMSala",
+    };
+  }
+
+  let data: { IsSuccess?: boolean; ErrorDescription?: string; ReturnData?: { Company?: string; Balance?: number; CreditLimit?: number } | null };
+  try {
+    data = await response.json();
+  } catch {
+    return { ok: false, errorReason: `SMSala returned a non-JSON response (HTTP ${response.status})` };
+  }
+
+  if (!response.ok || !data.IsSuccess || !data.ReturnData) {
+    return { ok: false, errorReason: data.ErrorDescription ?? `SMSala rejected the balance request (HTTP ${response.status})` };
+  }
+
+  return {
+    ok: true,
+    company: data.ReturnData.Company ?? "",
+    balance: data.ReturnData.Balance ?? 0,
+    creditLimit: data.ReturnData.CreditLimit ?? 0,
+  };
+}

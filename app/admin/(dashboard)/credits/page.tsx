@@ -15,6 +15,10 @@ type DotgoBalanceState =
   | { status: "idle" | "loading" }
   | { status: "ok"; currency: string; amount: number; mode: string; accountName: string }
   | { status: "error"; errorReason: string };
+type SmsalaBalanceState =
+  | { status: "idle" | "loading" }
+  | { status: "ok"; company: string; balance: number; creditLimit: number }
+  | { status: "error"; errorReason: string };
 
 export default function CreditsPage() {
   const { data: db, loading: dbLoading, error: dbError } = useAdminData();
@@ -22,6 +26,7 @@ export default function CreditsPage() {
   const [loadError, setLoadError] = useState("");
   const [accountFilter, setAccountFilter] = useState<"all" | "sms" | "voice">("all");
   const [dotgoBalance, setDotgoBalance] = useState<DotgoBalanceState>({ status: "idle" });
+  const [smsalaBalance, setSmsalaBalance] = useState<SmsalaBalanceState>({ status: "idle" });
 
   async function fetchDotgoBalance() {
     setDotgoBalance({ status: "loading" });
@@ -40,6 +45,17 @@ export default function CreditsPage() {
     }
   }
 
+  async function fetchSmsalaBalance() {
+    setSmsalaBalance({ status: "loading" });
+    const response = await fetch("/api/credits/smsala-balance");
+    const result = await response.json().catch(() => ({ ok: false, errorReason: "Unexpected response." }));
+    if (result.ok) {
+      setSmsalaBalance({ status: "ok", company: result.company, balance: result.balance, creditLimit: result.creditLimit });
+    } else {
+      setSmsalaBalance({ status: "error", errorReason: result.errorReason ?? "Couldn't fetch SMSala balance." });
+    }
+  }
+
   useEffect(() => {
     const supabase = createClient();
     supabase
@@ -54,6 +70,7 @@ export default function CreditsPage() {
         setTransactions(data ?? []);
       });
     fetchDotgoBalance();
+    fetchSmsalaBalance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -106,7 +123,7 @@ export default function CreditsPage() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <StatCard label="Voice credit" value={`${db.orgCredits.voiceMinutes.toLocaleString()} min`} />
         <StatCard
           label="SMS balance"
@@ -127,6 +144,24 @@ export default function CreditsPage() {
                 : "Real Dotgo balance — not kept in sync automatically"
           }
           tone={dotgoBalance.status === "error" ? "danger" : "default"}
+        />
+        <StatCard
+          label="Voice balance"
+          value={
+            smsalaBalance.status === "ok"
+              ? smsalaBalance.balance.toLocaleString()
+              : smsalaBalance.status === "loading"
+                ? "Loading…"
+                : "—"
+          }
+          hint={
+            smsalaBalance.status === "ok"
+              ? smsalaBalance.company
+              : smsalaBalance.status === "error"
+                ? smsalaBalance.errorReason
+                : "Real SMSala balance — not kept in sync automatically"
+          }
+          tone={smsalaBalance.status === "error" ? "danger" : "default"}
         />
       </div>
 
