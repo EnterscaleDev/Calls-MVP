@@ -7,8 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:ui": "playwright test --project=chromium --ui",
+    "test:e2e:admin": "playwright test --project=admin-setup --project=admin",
+    "test:e2e:agent": "playwright test --project=agent-setup --project=agent"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

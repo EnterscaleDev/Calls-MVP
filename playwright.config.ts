@@ -40,8 +40,40 @@ export default defineConfig({
   },
   projects: [
     {
+      // Default project — no-auth specs only. `npm run test:e2e` runs just
+      // this, so it never needs real credentials.
       name: "chromium",
+      testIgnore: /fixtures\/|\.auth\.spec\.ts$/,
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      // Opt-in only (`npx playwright test --project=admin-setup`) — logs in
+      // for real, so it needs E2E_ADMIN_EMAIL/PASSWORD populated first.
+      name: "admin-setup",
+      testMatch: /fixtures\/auth\.setup\.ts/,
+      grep: /authenticate as admin/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "agent-setup",
+      testMatch: /fixtures\/auth\.setup\.ts/,
+      grep: /authenticate as agent/,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      // Opt-in only (`npx playwright test --project=admin`) — depends on
+      // admin-setup, so it runs the real login first.
+      name: "admin",
+      testMatch: /\.auth\.spec\.ts$/,
+      testIgnore: /agent\./,
+      dependencies: ["admin-setup"],
+      use: { ...devices["Desktop Chrome"], storageState: path.join(__dirname, "e2e/fixtures/.auth-admin.json") },
+    },
+    {
+      name: "agent",
+      testMatch: /agent\..*\.auth\.spec\.ts$/,
+      dependencies: ["agent-setup"],
+      use: { ...devices["Desktop Chrome"], storageState: path.join(__dirname, "e2e/fixtures/.auth-agent.json") },
     },
   ],
   webServer: {
