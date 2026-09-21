@@ -9,6 +9,7 @@
 // (see app/ros.css) so the scoped base styles apply.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 const IC: Record<string, string> = {
   home: "M2.5 6.8L8 2.4l5.5 4.4v6.4a.8.8 0 01-.8.8H3.3a.8.8 0 01-.8-.8z",
@@ -392,40 +393,68 @@ export interface MenuItemSpec {
 
 export function Menu({ items, label = "•••" }: { items: (MenuItemSpec | false | null | undefined)[]; label?: string }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  // Popover renders in a portal on <body> and is positioned from the
+  // trigger button's viewport rect (position: fixed) — this is what keeps
+  // it from being clipped by a scroll-overflow table wrapper, which a
+  // plain `position: absolute` child of the table cell can't escape.
+  useEffect(() => {
+    if (!open || !btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (wrapRef.current?.contains(target)) return;
+      if (popRef.current?.contains(target)) return;
+      setOpen(false);
     };
+    const close = () => setOpen(false);
     document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", h);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
   }, [open]);
+
   return (
-    <div className="menu-wrap" ref={ref}>
-      <button className="btn btn-s" onClick={() => setOpen((o) => !o)} aria-haspopup="true" aria-expanded={open}>
+    <div className="menu-wrap" ref={wrapRef}>
+      <button ref={btnRef} className="btn btn-s" onClick={() => setOpen((o) => !o)} aria-haspopup="true" aria-expanded={open}>
         {label}
       </button>
-      {open && (
-        <div className="menu-pop">
-          {items.filter((it): it is MenuItemSpec => !!it).map((it, i) =>
-            it.sep ? (
-              <div key={i} className="menu-sep" />
-            ) : (
-              <button
-                key={i}
-                className={"menu-item" + (it.tone === "r" ? " r" : "")}
-                onClick={() => {
-                  setOpen(false);
-                  it.onClick?.();
-                }}
-              >
-                {it.label}
-              </button>
-            )
-          )}
-        </div>
-      )}
+      {open && pos && typeof document !== "undefined"
+        ? createPortal(
+            <div ref={popRef} className="menu-pop menu-pop-portal" style={{ top: pos.top, right: pos.right }}>
+              {items.filter((it): it is MenuItemSpec => !!it).map((it, i) =>
+                it.sep ? (
+                  <div key={i} className="menu-sep" />
+                ) : (
+                  <button
+                    key={i}
+                    className={"menu-item" + (it.tone === "r" ? " r" : "")}
+                    onClick={() => {
+                      setOpen(false);
+                      it.onClick?.();
+                    }}
+                  >
+                    {it.label}
+                  </button>
+                )
+              )}
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }

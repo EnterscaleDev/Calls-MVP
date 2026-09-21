@@ -191,6 +191,7 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
 .x:hover{background:#F1EFEC;color:var(--ink)}
 .menu-wrap{position:relative;display:inline-block}
 .menu-pop{position:absolute;right:0;top:calc(100% + 4px);min-width:190px;background:#fff;border:1px solid var(--line);border-radius:7px;box-shadow:0 12px 30px rgba(0,0,0,.18);z-index:60;padding:4px;display:flex;flex-direction:column}
+.menu-pop-portal{position:fixed}
 .menu-item{display:block;width:100%;text-align:left;background:none;border:0;padding:7px 10px;font-size:12.5px;font-weight:600;color:var(--ink);border-radius:5px;white-space:nowrap}
 .menu-item:hover{background:#F5F3F0}
 .menu-item.r{color:var(--red)}
