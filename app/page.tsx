@@ -8,11 +8,10 @@ export default function Home() {
       <div className="text-center">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/enterscale-logo.png" alt="Enterscale" className="mx-auto h-8 w-auto" />
-        <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-primary">Calls MVP</p>
-        <h1 className="mt-2 text-2xl font-semibold text-foreground">Research operations, telephone interviews</h1>
+        <h1 className="mt-4 text-2xl font-semibold text-foreground">Customer Discovery Tool</h1>
         <p className="mx-auto mt-2 max-w-md text-sm text-foreground-muted">
-          A prototype vertical slice: create a campaign, invite participants by SMS, book interviews,
-          assign agents, and run calls — end to end.
+          Create a campaign, invite participants by SMS, book interviews, assign agents, and run
+          discovery calls.
         </p>
       </div>
       <div className="grid w-full gap-4 sm:grid-cols-3">

@@ -71,7 +71,7 @@
   --color-neutral-soft: var(--neutral-soft);
 
   --font-sans: var(--font-geist-sans);
-  --font-display: var(--font-bricolage);
+  --font-display: var(--font-space-grotesk);
 }
 
 body {

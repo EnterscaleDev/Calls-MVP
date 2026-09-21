@@ -2,9 +2,10 @@
  * (Research Ops Platform design system), for the Agent Lifecycle & Invite
  * screens only. Every token, class, spacing, and color value below is
  * unchanged from the source — the only edits are: font-family swapped to
- * this app's Geist Sans body / Bricolage Grotesque display type (per
- * explicit direction — the source file itself used Barlow/Space Grotesk),
- * and the handful of bare element selectors (body, a, button, h1-h4, form
+ * this app's Geist Sans body / Space Grotesk display type (the source file
+ * itself used Barlow/Space Grotesk — this app now matches its display font
+ * exactly, body font stays Geist Sans), and the handful of bare element
+ * selectors (body, a, button, h1-h4, form
  * inputs, ::selection) scoped under .ros-root so they don't leak into the
  * rest of the app's unrelated Tailwind-based pages. Every class-based rule
  * (.btn, .card, .ch-*, .modal, etc.) is untouched and needs no wrapper to
@@ -14,7 +15,7 @@
 .ros-root{font-family:var(--font-geist-sans),system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
 .ros-root a{color:var(--o);text-decoration:none}.ros-root a:hover{color:var(--navy)}
 .ros-root button{font:inherit;cursor:pointer}
-.ros-root h1,.ros-root h2,.ros-root h3,.ros-root h4{margin:0;font-family:var(--font-bricolage),sans-serif;font-weight:700;letter-spacing:-.022em}
+.ros-root h1,.ros-root h2,.ros-root h3,.ros-root h4{margin:0;font-family:var(--font-display),sans-serif;font-weight:700;letter-spacing:-.022em}
 .ros-root ::selection{background:var(--o-soft)}
 .mono{font-variant-numeric:tabular-nums}
 
@@ -54,7 +55,7 @@
 .page.narrow{max-width:860px}
 
 /* ---------- type ---------- */
-.h2{font-family:var(--font-bricolage),sans-serif;font-size:14px;font-weight:700;letter-spacing:-.02em}
+.h2{font-family:var(--font-display),sans-serif;font-size:14px;font-weight:700;letter-spacing:-.02em}
 .eyebrow{font-size:10px;letter-spacing:.13em;text-transform:uppercase;font-weight:700;color:var(--mut-2)}
 .mut{color:var(--mut)}
 .sm{font-size:12px}
@@ -84,7 +85,7 @@
 /* ---------- kpi ---------- */
 .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:13px 15px}
 .kpi-l{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut-2);font-weight:700}
-.kpi-v{font-family:var(--font-bricolage),sans-serif;font-size:25px;font-weight:700;letter-spacing:-.035em;margin-top:5px;line-height:1;font-variant-numeric:tabular-nums}
+.kpi-v{font-family:var(--font-display),sans-serif;font-size:25px;font-weight:700;letter-spacing:-.035em;margin-top:5px;line-height:1;font-variant-numeric:tabular-nums}
 .kpi-v small{font-size:13px;font-weight:600;color:var(--mut);letter-spacing:0}
 .kpi-d{font-size:11px;color:var(--mut);margin-top:5px}
 .kpi.hero{background:var(--navy);border-color:var(--navy);color:#fff}
@@ -201,8 +202,8 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
 .ws{display:grid;grid-template-columns:300px minmax(0,1fr);gap:16px;align-items:start}
 .ws-live{background:var(--navy);color:#fff;border-radius:var(--r);padding:18px}
 .ws-live .kpi-l{color:rgba(255,255,255,.82)}
-.pid{font-family:var(--font-bricolage),sans-serif;font-size:22px;font-weight:700;letter-spacing:-.03em}
-.timer{font-family:var(--font-bricolage),sans-serif;font-size:34px;font-weight:700;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
+.pid{font-family:var(--font-display),sans-serif;font-size:22px;font-weight:700;letter-spacing:-.03em}
+.timer{font-family:var(--font-display),sans-serif;font-size:34px;font-weight:700;letter-spacing:-.04em;font-variant-numeric:tabular-nums;line-height:1}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--o);display:inline-block}
 .dot.live{background:#3ED598;animation:pulse 1.6s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -238,11 +239,11 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
 .gk:last-child{border-bottom:0;padding-bottom:0}
 .gk-i{width:32px;height:32px;border-radius:50%;background:var(--o-soft);color:var(--o);display:flex;align-items:center;justify-content:center;flex:none}
 .gk-i.n{background:#EDF2F5;color:var(--navy)}
-.gk b{display:block;font-family:var(--font-bricolage),sans-serif;font-size:14px;letter-spacing:-.02em;margin-bottom:2px}
+.gk b{display:block;font-family:var(--font-display),sans-serif;font-size:14px;letter-spacing:-.02em;margin-bottom:2px}
 .gk em{display:block;font-style:normal;font-size:13.5px;color:var(--mut);line-height:1.45}
-.pub-sec{font-family:var(--font-bricolage),sans-serif;font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut-2);font-weight:700;margin:22px 0 2px}
+.pub-sec{font-family:var(--font-display),sans-serif;font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--mut-2);font-weight:700;margin:22px 0 2px}
 .incentive{border:1px solid var(--o-line);background:var(--o-soft);border-radius:6px;padding:16px 18px;display:flex;gap:14px;align-items:flex-start}
-.incentive b{font-family:var(--font-bricolage),sans-serif;font-size:16px;letter-spacing:-.02em;display:block}
+.incentive b{font-family:var(--font-display),sans-serif;font-size:16px;letter-spacing:-.02em;display:block}
 .pub-body{padding:22px 24px}
 .pub-body h3{font-size:15px;margin-bottom:6px}
 .pub p{margin:0 0 12px;font-size:14.5px;line-height:1.6}
@@ -255,7 +256,7 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
 .daypick{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:14px}
 .day{flex:none;border:1px solid var(--line);background:#fff;border-radius:5px;padding:8px 12px;text-align:center;min-width:66px}
 .day.on{background:var(--navy);border-color:var(--navy);color:#fff}
-.day b{display:block;font-family:var(--font-bricolage),sans-serif;font-size:16px;font-weight:700;line-height:1.15}
+.day b{display:block;font-family:var(--font-display),sans-serif;font-size:16px;font-weight:700;line-height:1.15}
 .day span{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase}
 .consent{display:flex;gap:9px;align-items:flex-start;border:1px solid var(--line);border-radius:6px;padding:12px 14px;font-size:13px;line-height:1.5;cursor:pointer}
 .consent.on{border-color:var(--o);background:var(--o-soft)}
@@ -273,7 +274,7 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
 @media(max-width:900px){:root{--sb:64px}.sb-wm,.sb-sub,.nv span.lbl,.who-n,.who-r,.sb-grp,.peek{display:none}.sb-foot .rsw{flex-direction:column}.nv{justify-content:center;padding:9px 0}.nv.on:before{left:-10px}.sb-top{padding:16px 0;text-align:center}.g3,.g2{grid-template-columns:1fr}.page{padding:18px 14px 64px}.top{padding:0 14px}}
 @media(max-width:720px){.g4,.g5,.g6{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi-v{font-size:21px}}
 
-.dsp{font-family:var(--font-bricolage),sans-serif;font-weight:700;letter-spacing:-.035em}
+.dsp{font-family:var(--font-display),sans-serif;font-weight:700;letter-spacing:-.035em}
 
 /* ---------- notifications ---------- */
 .bell-dot{position:absolute;top:1px;right:1px;background:var(--o);color:#fff;font-size:9.5px;font-weight:700;min-width:15px;height:15px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px;border:2px solid #fff}
@@ -296,7 +297,7 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
 .acct{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
 .acct.low{border-color:#EED9D5;background:linear-gradient(180deg,var(--red-soft),#fff 46%)}
 .acct-p{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--mut-2)}
-.acct-v{font-family:var(--font-bricolage),sans-serif;font-size:29px;font-weight:700;letter-spacing:-.035em;line-height:1;margin:9px 0 4px;font-variant-numeric:tabular-nums}
+.acct-v{font-family:var(--font-display),sans-serif;font-size:29px;font-weight:700;letter-spacing:-.035em;line-height:1;margin:9px 0 4px;font-variant-numeric:tabular-nums}
 
 /* ---------- survey ---------- */
 .opt{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:6px;padding:11px 13px;font-size:13.5px;font-weight:500;color:var(--ink);transition:.12s}
@@ -313,7 +314,7 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
 .phone{border:1px solid var(--line);border-radius:10px;padding:16px 16px 20px;background:#FBFAF9;max-width:330px}
 .ph-bar{height:4px;background:#E7E3DF;border-radius:2px;overflow:hidden}
 .ph-fill{height:100%;background:var(--o);border-radius:2px;transition:width .25s}
-.rank{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-family:var(--font-bricolage),sans-serif;font-size:12px;font-weight:700;flex:none;background:#fff}
+.rank{width:26px;height:26px;border-radius:50%;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-family:var(--font-display),sans-serif;font-size:12px;font-weight:700;flex:none;background:#fff}
 .ctype{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2.5px 7px;border-radius:3px;border:1px solid var(--navy);color:var(--navy);background:#EDF2F5}
 .ctype.s{border-color:var(--teal);color:#026470;background:var(--teal-soft)}
 .ctype.f{border-color:var(--o);color:#C43D00;background:var(--o-soft)}
@@ -357,7 +358,7 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
 .tpick-i{width:40px;height:40px;border-radius:50%;background:#EDF2F5;color:var(--navy);display:flex;align-items:center;justify-content:center;margin-bottom:13px}
 .tpick-i.s{background:var(--teal-soft);color:#026470}
 .tpick-i.f{background:var(--o-soft);color:#C43D00}
-.tpick b{font-family:var(--font-bricolage),sans-serif;font-size:16px;letter-spacing:-.025em;margin-bottom:5px}
+.tpick b{font-family:var(--font-display),sans-serif;font-size:16px;letter-spacing:-.025em;margin-bottom:5px}
 .tpick-d{font-size:12.8px;line-height:1.5;color:var(--mut)}
 .tpick-l{margin:13px 0 0;padding-left:16px;font-size:12.3px;line-height:1.5;color:var(--mut)}
 .tpick-l li{margin-bottom:3px}
