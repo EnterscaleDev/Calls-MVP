@@ -53,7 +53,6 @@ export default function AgentsPage() {
   const [manage, setManage] = useState<AgentProfile | null>(null);
   const [info, setInfo] = useState<AgentRow | null>(null);
   const [revoke, setRevoke] = useState<AgentInvitation | null>(null);
-  const [delInv, setDelInv] = useState<AgentInvitation | null>(null);
   const [removeCtx, setRemoveCtx] = useState<RemoveCtx | null>(null);
   const [deactivate, setDeactivate] = useState<AgentProfile | null>(null);
   const [reactivate, setReactivate] = useState<AgentProfile | null>(null);
@@ -153,8 +152,17 @@ export default function AgentsPage() {
 
   function menuFor(row: AgentRow): (MenuItemSpec | false)[] {
     if (row.kind === "invite") {
+      const agent = db!.agents.find((a) => a.id === row.agentId);
       const invitation = latestInvitationFor(db!.agentInvitations, row.agentId);
-      if (!invitation) return [];
+      // Deleting an invitation record never accepts leaves the underlying
+      // agent_profiles row behind — the only real removal is deleting the
+      // whole Agent (admin_delete_agent takes any lingering invitation rows
+      // with it too). Also the sole recovery path once an invitation has
+      // already been deleted and this row has nothing left to act on.
+      const deleteItem: MenuItemSpec | false = agent
+        ? { label: "Delete Agent", tone: "r", onClick: () => setDelAgent(agent) }
+        : false;
+      if (!invitation) return [deleteItem];
       if (row.status === "Pending") {
         return [
           { label: "View invite", onClick: () => setInfo(row) },
@@ -168,10 +176,10 @@ export default function AgentsPage() {
           { label: "View invite", onClick: () => setInfo(row) },
           { label: "Send new invitation", onClick: () => resendInvitation(invitation) },
           { sep: true },
-          { label: "Delete invitation", tone: "r", onClick: () => setDelInv(invitation) },
+          deleteItem,
         ];
       }
-      return [{ label: "Delete invitation", tone: "r", onClick: () => setDelInv(invitation) }]; // Revoked
+      return [deleteItem]; // Revoked
     }
     const agent = db!.agents.find((a) => a.id === row.agentId);
     if (!agent) return [];
@@ -203,20 +211,6 @@ export default function AgentsPage() {
     await Promise.all([refetch(), refetchRows()]);
     toast("Invitation revoked");
     setRevoke(null);
-  }
-
-  async function handleDeleteInvitation() {
-    if (!delInv) return;
-    const supabase = createClient();
-    const { error: rpcError } = await supabase.rpc("admin_delete_invitation", { p_invitation_id: delInv.id });
-    if (rpcError) {
-      toast(rpcError.message);
-      setDelInv(null);
-      return;
-    }
-    await Promise.all([refetch(), refetchRows()]);
-    toast("Invitation deleted");
-    setDelInv(null);
   }
 
   const hasAnyAgents = totalCount > 0 || search.trim() || statusFilter !== "all";
@@ -394,21 +388,6 @@ export default function AgentsPage() {
           }
         >
           {revoke && <p style={{ margin: 0 }}>{revoke.email.split("@")[0]} will no longer be able to use this invitation to join your team.</p>}
-        </Modal>
-        <Modal
-          open={!!delInv}
-          close={() => setDelInv(null)}
-          title="Delete invitation?"
-          foot={
-            <>
-              <Btn onClick={() => setDelInv(null)}>Cancel</Btn>
-              <Btn k="r" disabled={busy} onClick={handleDeleteInvitation}>
-                Delete invitation
-              </Btn>
-            </>
-          }
-        >
-          <p style={{ margin: 0 }}>Removes this invitation from the list. This cannot be undone.</p>
         </Modal>
 
         <Toast msg={msg} />
