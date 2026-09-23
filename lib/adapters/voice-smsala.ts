@@ -1,4 +1,14 @@
 import "server-only";
+import dns from "node:dns";
+
+// SMSala's Voice Connection IP allowlist only ever recognizes IPv4
+// addresses — confirmed live: an unforced request from a dual-stack host
+// went out over IPv6 and was rejected ("Ip Address Not Allowed") even with
+// the correct IPv4 address whitelisted, while the identical request forced
+// over IPv4 succeeded immediately. Node's fetch prefers IPv6 when both are
+// available (api2.smsala.com has AAAA records via Cloudflare), so force
+// IPv4 resolution here rather than leave this to chance per-environment.
+dns.setDefaultResultOrder("ipv4first");
 
 /**
  * Real SMSala Voice integration (Voice_API_SMSala.pdf, "Voice Bridge"
