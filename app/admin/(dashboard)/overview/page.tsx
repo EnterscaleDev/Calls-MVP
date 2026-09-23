@@ -10,6 +10,7 @@ import { Card, CardHeader, CardBody, StatCard } from "@/components/ui/Card";
 import { CampaignStatusBadge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { Field, Input } from "@/components/ui/Form";
 import { formatPercent, isToday } from "../_lib/format";
 import { SMS_TOP_UP_PACKAGES, VOICE_TOP_UP_PACKAGES, type TopUpPackage } from "../_lib/credits";
 import type { AssignmentStatus } from "@/lib/types";
@@ -22,6 +23,12 @@ type DotgoBalanceState =
   | { status: "ok"; currency: string; amount: number }
   | { status: "error" };
 
+type TestCallState =
+  | { status: "idle" }
+  | { status: "placing" }
+  | { status: "success" }
+  | { status: "error"; errorReason: string };
+
 export default function AdminOverviewPage() {
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [topUpKind, setTopUpKind] = useState<"sms" | "voice">("sms");
@@ -30,6 +37,10 @@ export default function AdminOverviewPage() {
   const [topUpError, setTopUpError] = useState("");
   const [topingUp, setTopingUp] = useState(false);
   const [dotgoBalance, setDotgoBalance] = useState<DotgoBalanceState>({ status: "idle" });
+  const [testCallOpen, setTestCallOpen] = useState(false);
+  const [testCallerNumber, setTestCallerNumber] = useState("");
+  const [testCalledNumber, setTestCalledNumber] = useState("");
+  const [testCallState, setTestCallState] = useState<TestCallState>({ status: "idle" });
 
   const { data: db, loading, error, refetch } = useAdminData();
 
@@ -60,6 +71,28 @@ export default function AdminOverviewPage() {
     setTopUpSuccess("");
     setTopUpError("");
     setTopUpOpen(true);
+  }
+
+  function openTestCall() {
+    setTestCallState({ status: "idle" });
+    setTestCallOpen(true);
+  }
+
+  async function handlePlaceTestCall() {
+    setTestCallState({ status: "placing" });
+    const response = await fetch("/api/voice/test-call", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callerNumber: testCallerNumber.trim(), calledNumber: testCalledNumber.trim() }),
+    });
+    const result = (await response.json().catch(() => ({ ok: false, errorReason: "Unexpected response." }))) as
+      | { ok: true }
+      | { ok: false; errorReason: string };
+    if (!result.ok) {
+      setTestCallState({ status: "error", errorReason: result.errorReason });
+      return;
+    }
+    setTestCallState({ status: "success" });
   }
 
   async function handleConfirmTopUp() {
@@ -232,6 +265,57 @@ export default function AdminOverviewPage() {
           </div>
         </StatCard>
       </div>
+
+      <button
+        type="button"
+        onClick={openTestCall}
+        className="w-fit text-xs font-semibold text-primary hover:underline"
+      >
+        Place a test call →
+      </button>
+
+      <Modal
+        open={testCallOpen}
+        onClose={() => setTestCallOpen(false)}
+        title="Place a test call"
+        description="Bridges two real phone numbers via SMSala directly — no campaign, booking, or assignment needed. Both numbers will actually ring and this spends real SMSala credit."
+      >
+        <div className="flex flex-col gap-4">
+          {testCallState.status === "success" ? (
+            <InlineBanner kind="success">Call submitted — both numbers should ring shortly.</InlineBanner>
+          ) : null}
+          {testCallState.status === "error" ? (
+            <InlineBanner kind="danger">{testCallState.errorReason}</InlineBanner>
+          ) : null}
+          <Field label="Caller number" hint="Rings first — E.164 format, e.g. +2348012345678">
+            <Input
+              type="tel"
+              value={testCallerNumber}
+              onChange={(e) => setTestCallerNumber(e.target.value)}
+              placeholder="+2348012345678"
+            />
+          </Field>
+          <Field label="Destination number" hint="Connected once the caller number answers">
+            <Input
+              type="tel"
+              value={testCalledNumber}
+              onChange={(e) => setTestCalledNumber(e.target.value)}
+              placeholder="+2348012345678"
+            />
+          </Field>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setTestCallOpen(false)} disabled={testCallState.status === "placing"}>
+              Close
+            </Button>
+            <Button
+              onClick={handlePlaceTestCall}
+              disabled={testCallState.status === "placing" || !testCallerNumber.trim() || !testCalledNumber.trim()}
+            >
+              {testCallState.status === "placing" ? "Placing call..." : "Place test call"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={topUpOpen}
