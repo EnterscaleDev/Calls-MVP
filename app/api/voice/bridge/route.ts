@@ -47,16 +47,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, errorReason: "That call isn't assigned to you." }, { status: 403 });
   }
 
-  const { data: agentRow } = await service
-    .from("agent_profiles")
-    .select("phone")
-    .eq("id", profile.agent_id)
-    .maybeSingle();
-  if (!agentRow?.phone) {
-    return NextResponse.json(
-      { ok: false, errorReason: "No phone number on file for your agent profile — ask an admin to add one." },
-      { status: 400 }
-    );
+  // When set, the agent leg goes to SMSala's shared virtual number, which
+  // rings every registered agent dialer (a ring group — first to answer
+  // wins) and gets the call recorded. Otherwise fall back to ringing the
+  // agent's own phone directly.
+  let callerNumber = process.env.SMSALA_DIALER_NUMBER;
+  if (!callerNumber) {
+    const { data: agentRow } = await service
+      .from("agent_profiles")
+      .select("phone")
+      .eq("id", profile.agent_id)
+      .maybeSingle();
+    if (!agentRow?.phone) {
+      return NextResponse.json(
+        { ok: false, errorReason: "No phone number on file for your agent profile — ask an admin to add one." },
+        { status: 400 }
+      );
+    }
+    callerNumber = agentRow.phone;
   }
 
   let participantPhone: string;
@@ -79,7 +87,7 @@ export async function POST(request: Request) {
   const callbackUrl = `${appUrl}/api/voice/smsala-callback`;
 
   const result = await bridgeCall({
-    callerNumber: agentRow.phone,
+    callerNumber,
     calledNumber: participantPhone,
     clientUniqueId: body.clientUniqueId,
     callbackUrl,
