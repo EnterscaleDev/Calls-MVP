@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { estimateSegments } from "@/lib/adapters/sms";
 import { createClient } from "@/lib/supabase/client";
 import { useAdminData } from "@/lib/hooks/useAdminData";
-import { generateSecureToken, sha256Hex } from "@/lib/supabase/tokens";
 import { getAuditLog } from "@/lib/selectors";
 import { Card, CardHeader, CardBody, StatCard } from "@/components/ui/Card";
 import { Field, Input, Textarea } from "@/components/ui/Form";
@@ -18,7 +17,6 @@ import { useCampaignDetail } from "../campaign-context";
 
 const DEFAULT_BODY =
   "Hi {{first_name}}, we'd love to hear about your experience. Book a short call here: {{campaign_link}}";
-const TOKEN_EXPIRY_DAYS = 30;
 
 export default function InvitationsPage() {
   const campaign = useCampaignDetail();
@@ -41,6 +39,7 @@ export default function InvitationsPage() {
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
   const [sentBanner, setSentBanner] = useState("");
+  const [sendProgress, setSendProgress] = useState<{ done: number; total: number } | null>(null);
 
   const fullBody = incentiveText ? `${body}\n\n${incentiveText}` : body;
   const segments = estimateSegments(fullBody);
@@ -172,138 +171,62 @@ export default function InvitationsPage() {
     }
     setSending(true);
     setSendError("");
+    setSendProgress(null);
     try {
-      const supabase = createClient();
-      const eligible = sendMode === "new" ? participants.filter((p) => p.participationStatus === "imported") : failedParticipants;
-
-      const projectedCost = eligible.length * segments * SMS_CREDIT_COST_PER_SEGMENT;
-      if (projectedCost > db.orgCredits.sms) {
-        setSendError(
-          `Not enough SMS credit for this send — needs ${projectedCost}, ${db.orgCredits.sms} available.`
-        );
+      // The actual sending (token minting, Dotgo calls, per-row status
+      // updates) now happens server-side, concurrently, after this request
+      // returns — see app/api/sms/send-batch/route.ts. This tab only kicks
+      // it off and polls for progress below; it no longer has to stay
+      // blocked on one giant sequential loop for the whole send.
+      const response = await fetch("/api/sms/send-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          campaignId: campaign.id,
+          sendMode: sendMode === "new" ? "new" : "failed",
+          senderId,
+          messageBody: body,
+          incentiveText,
+        }),
+      });
+      const result = (await response.json().catch(() => ({
+        ok: false,
+        errorReason: "Unexpected response from the send endpoint.",
+      }))) as { ok: true; totalEligible: number; batchStartedAt: string } | { ok: false; errorReason: string };
+      if (!result.ok) {
+        setSendError(result.errorReason);
         return;
       }
 
-      // Sending needs the raw phone to hand to the (still-mocked) SMS
-      // adapter — reveal is the one sanctioned, audited path to it. This
-      // fires one contact_numbers_revealed audit row for the batch, same as
-      // clicking Reveal on the Audience tab would.
-      const contactIds = eligible.map((p) => p.contactId);
-      const { data: revealed, error: revealErr } = await supabase.rpc("contacts_reveal", {
-        p_contact_ids: contactIds,
-        p_campaign_id: campaign.id,
-      });
-      if (revealErr) throw revealErr;
-      const phoneByContactId = new Map((revealed ?? []).map((r) => [r.id, r.phone]));
-
+      setSendProgress({ done: 0, total: result.totalEligible });
+      const supabase = createClient();
       let sentCount = 0;
-      for (const participant of eligible) {
-        const phone = phoneByContactId.get(participant.contactId);
-        if (!phone) continue;
+      const pollStartedAt = Date.now();
+      const POLL_TIMEOUT_MS = 6.5 * 60 * 1000; // safety net past the route's own 300s maxDuration
 
-        // Fresh token minted at send time, not at import — link validity
-        // starts counting from when it's actually distributed, not from
-        // whenever the contact happened to be uploaded.
-        const token = generateSecureToken();
-        const tokenHash = await sha256Hex(token);
-        const expiresAt = new Date(
-          Date.now() + TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000
-        ).toISOString();
-        await supabase
-          .from("campaign_participants")
-          .update({ invite_token_hash: tokenHash, token_expires_at: expiresAt })
-          .eq("id", participant.id);
-
-        // Insert the invitation row before sending so we have a real id to
-        // hand Dotgo as the request's own `id` — see lib/adapters/sms-dotgo.ts
-        // for why that matters for correlating its delivery-status webhook.
-        const { data: invitationRow, error: insertError } = await supabase
-          .from("campaign_invitations")
-          .insert({
-            campaign_id: campaign.id,
-            participant_id: participant.id,
-            provider_message_id: "",
-            status: "queued",
-          })
-          .select("id")
-          .single();
-        if (insertError || !invitationRow) continue;
-
-        const contact = db.contacts.find((c) => c.id === participant.contactId);
-        const firstName = (contact?.name ?? "").trim().split(/\s+/)[0] || "there";
-        // Routed through our own click-tracking redirect (app/r/[invitationId])
-        // rather than straight to /participate — Dotgo's own track_url never
-        // fired on a real send/click, so this is self-hosted instead.
-        const campaignLink = `${window.location.origin}/r/${invitationRow.id}?t=${token}`;
-        const personalizedBody = (incentiveText ? `${body}\n\n${incentiveText}` : body)
-          .replaceAll("{{first_name}}", firstName)
-          .replaceAll("{{campaign_link}}", campaignLink);
-
-        const sendResponse = await fetch("/api/sms/send", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            to: phone,
-            body: personalizedBody,
-            requestId: invitationRow.id,
-            senderMask: senderId,
-          }),
-        });
-        const sendResult = (await sendResponse.json().catch(() => ({
-          ok: false,
-          errorReason: "Unexpected response from the send endpoint.",
-        }))) as { ok: true } | { ok: false; errorReason: string };
-        const now = new Date().toISOString();
-
-        await supabase
-          .from("campaign_invitations")
-          .update({
-            status: sendResult.ok ? "sent" : "failed",
-            sent_at: sendResult.ok ? now : null,
-            failed_at: sendResult.ok ? null : now,
-            failure_reason: sendResult.ok ? null : sendResult.errorReason,
-          })
-          .eq("id", invitationRow.id);
-
-        await supabase
-          .from("campaign_participants")
-          .update({
-            participation_status: sendResult.ok ? "invited" : "invite_failed",
-          })
-          .eq("id", participant.id);
-
-        await supabase.from("audit_events").insert({
-          organisation_id: campaign.organisationId,
-          campaign_id: campaign.id,
-          actor_type: "system",
-          actor_name: "Dotgo",
-          action: "invitation_sent",
-          entity_type: "campaign_participant",
-          entity_id: participant.id,
-          metadata: { status: sendResult.ok ? "sent" : "failed" },
-        });
-
-        if (sendResult.ok) sentCount += 1;
-        // Delivered/failed status now arrives via Dotgo's real delivery
-        // webhook (app/api/sms/dotgo-callback/route.ts), not a client-side
-        // timer — a manual reload picks up the final status once it lands.
-      }
-
-      await supabase.rpc("log_sms_batch_sent", {
-        p_campaign_id: campaign.id,
-        p_recipient_count: eligible.length,
+      await new Promise<void>((resolve) => {
+        const interval = setInterval(async () => {
+          const { data: rows } = await supabase
+            .from("campaign_invitations")
+            .select("status")
+            .eq("campaign_id", campaign.id)
+            .gte("created_at", result.batchStartedAt);
+          // Every row this batch writes starts "queued" then flips to a
+          // terminal sent/failed status (delivered only ever follows sent,
+          // via Dotgo's async webhook) — "not queued anymore" is exactly
+          // "this participant's send attempt finished".
+          const finished = (rows ?? []).filter((r) => r.status !== "queued");
+          sentCount = finished.filter((r) => r.status === "sent" || r.status === "delivered").length;
+          setSendProgress({ done: finished.length, total: result.totalEligible });
+          if (finished.length >= result.totalEligible || Date.now() - pollStartedAt > POLL_TIMEOUT_MS) {
+            clearInterval(interval);
+            resolve();
+          }
+        }, 1200);
       });
-
-      if (sentCount > 0) {
-        await supabase.rpc("record_sms_send_cost", {
-          p_campaign_id: campaign.id,
-          p_amount: sentCount * segments * SMS_CREDIT_COST_PER_SEGMENT,
-          p_recipient_count: sentCount,
-        });
-      }
 
       setSentBanner(
-        `Sent to ${sentCount} of ${eligible.length} eligible participant${eligible.length === 1 ? "" : "s"}.`
+        `Sent to ${sentCount} of ${result.totalEligible} eligible participant${result.totalEligible === 1 ? "" : "s"}.`
       );
       setConfirmOpen(false);
       await refetch();
@@ -311,6 +234,7 @@ export default function InvitationsPage() {
       setSendError("Something went wrong sending invitations. Try again.");
     } finally {
       setSending(false);
+      setSendProgress(null);
     }
   }
 
@@ -523,12 +447,28 @@ export default function InvitationsPage() {
           return `You are about to ${verb} ${count} participant${count === 1 ? "" : "s"}.`;
         })()}
       >
+        {sendProgress ? (
+          <div className="mb-4">
+            <div className="mb-1.5 flex items-center justify-between text-xs font-medium text-foreground-muted">
+              <span>
+                Sending {sendProgress.done} of {sendProgress.total}
+              </span>
+              <span>{Math.round((sendProgress.done / Math.max(sendProgress.total, 1)) * 100)}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-[width]"
+                style={{ width: `${Math.round((sendProgress.done / Math.max(sendProgress.total, 1)) * 100)}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
         <div className="flex justify-end gap-3">
           <Button variant="secondary" onClick={() => setConfirmOpen(false)} disabled={sending}>
             Cancel
           </Button>
           <Button onClick={handleConfirmSend} disabled={sending}>
-            {sending ? "Sending..." : "Send now"}
+            {sending ? (sendProgress ? "Sending..." : "Starting...") : "Send now"}
           </Button>
         </div>
       </Modal>
