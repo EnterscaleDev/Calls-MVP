@@ -48,6 +48,7 @@ export default function CallWorkspacePage({
   const [actorName, setActorName] = useState<string>("Agent");
 
   const [callState, setCallState] = useState<LocalCallState>("idle");
+  const [callFailureReason, setCallFailureReason] = useState("");
   const [callAttemptId, setCallAttemptId] = useState<string | null>(null);
   const [connectedAt, setConnectedAt] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -186,6 +187,7 @@ export default function CallWorkspacePage({
 
   async function handleStartCall() {
     if (!assignment || !detail) return;
+    setCallFailureReason("");
     setCallState("preparing");
     try {
       const supabase = createClient();
@@ -235,6 +237,7 @@ export default function CallWorkspacePage({
       }))) as { ok: true } | { ok: false; errorReason: string };
 
       if (!bridgeResult.ok) {
+        setCallFailureReason(bridgeResult.errorReason);
         setCallState("failed");
         await supabase.from("call_attempts").update({ status: "failed" }).eq("id", attemptId);
         return;
@@ -373,8 +376,8 @@ export default function CallWorkspacePage({
         <div className="mt-4 rounded-[8px] border border-danger/30 bg-danger-soft px-4 py-5">
           <p className="text-sm font-semibold text-danger">The call couldn&apos;t connect</p>
           <p className="mt-1 text-sm text-danger/80">
-            The line may have been busy or unreachable. You can try again, or log an outcome for this
-            attempt without retrying.
+            {callFailureReason ||
+              "The line may have been busy or unreachable. You can try again, or log an outcome for this attempt without retrying."}
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <Button onClick={handleStartCall} className="flex-1 justify-center">
