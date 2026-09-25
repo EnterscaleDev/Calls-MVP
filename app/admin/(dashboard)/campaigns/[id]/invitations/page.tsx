@@ -35,7 +35,7 @@ export default function InvitationsPage() {
   const [sendingTest, setSendingTest] = useState(false);
   const [testError, setTestError] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [sendMode, setSendMode] = useState<"new" | "failed">("new");
+  const [sendMode, setSendMode] = useState<"new" | "failed" | "clicked_unbooked">("new");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
   const [sentBanner, setSentBanner] = useState("");
@@ -77,6 +77,20 @@ export default function InvitationsPage() {
   const participants = db.participants.filter((p) => p.campaignId === campaign.id);
   const eligibleCount = participants.filter((p) => p.participationStatus === "imported").length;
   const failedParticipants = participants.filter((p) => p.participationStatus === "invite_failed");
+  // Opened their invitation link but never booked (nor finished/declined) —
+  // the server recomputes this itself when sending; this is just the count.
+  const clickedParticipantIds = new Set(
+    db.invitations.filter((i) => i.campaignId === campaign.id && i.clickedAt).map((i) => i.participantId)
+  );
+  const bookedParticipantIds = new Set(
+    db.bookings.filter((b) => b.status === "scheduled" || b.status === "rescheduled").map((b) => b.participantId)
+  );
+  const unbookedClickers = participants.filter(
+    (p) =>
+      clickedParticipantIds.has(p.id) &&
+      !bookedParticipantIds.has(p.id) &&
+      !["imported", "invite_failed", "scheduled", "completed", "declined", "ineligible"].includes(p.participationStatus)
+  );
 
   const failedCount = invitationRows.filter((r) => r.invitation.status === "failed").length;
   const queuedCount = invitationRows.filter((r) => r.invitation.status === "queued").length;
@@ -183,7 +197,7 @@ export default function InvitationsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           campaignId: campaign.id,
-          sendMode: sendMode === "new" ? "new" : "failed",
+          sendMode,
           senderId,
           messageBody: body,
           incentiveText,
@@ -299,6 +313,18 @@ export default function InvitationsPage() {
                   }}
                 >
                   Resend Failed ({failedParticipants.length})
+                </Button>
+              ) : null}
+              {unbookedClickers.length > 0 ? (
+                <Button
+                  variant="secondary"
+                  disabled={sendsBlocked}
+                  onClick={() => {
+                    setSendMode("clicked_unbooked");
+                    setConfirmOpen(true);
+                  }}
+                >
+                  Remind Clicked, Not Booked ({unbookedClickers.length})
                 </Button>
               ) : null}
               <Button
@@ -440,9 +466,16 @@ export default function InvitationsPage() {
       <Modal
         open={confirmOpen}
         onClose={() => (sending ? undefined : setConfirmOpen(false))}
-        title={sendMode === "new" ? "Send campaign invitations" : "Resend to failed contacts"}
+        title={
+          sendMode === "new"
+            ? "Send campaign invitations"
+            : sendMode === "failed"
+              ? "Resend to failed contacts"
+              : "Remind people who clicked but didn't book"
+        }
         description={(() => {
-          const count = sendMode === "new" ? eligibleCount : failedParticipants.length;
+          const count =
+            sendMode === "new" ? eligibleCount : sendMode === "failed" ? failedParticipants.length : unbookedClickers.length;
           const verb = sendMode === "new" ? "send this invitation to" : "resend this invitation to";
           return `You are about to ${verb} ${count} participant${count === 1 ? "" : "s"}.`;
         })()}

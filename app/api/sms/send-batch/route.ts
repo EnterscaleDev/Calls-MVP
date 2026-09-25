@@ -35,7 +35,9 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as {
     campaignId?: string;
-    sendMode?: "new" | "failed";
+    sendMode?: "new" | "failed" | "clicked_unbooked" | "selected";
+    /** Only for sendMode "selected": exactly these participants (must belong to the campaign). */
+    participantIds?: string[];
     senderId?: string;
     messageBody?: string;
     incentiveText?: string;
@@ -43,7 +45,10 @@ export async function POST(request: Request) {
   if (!body?.campaignId || !body.sendMode || !body.senderId || !body.messageBody) {
     return NextResponse.json({ ok: false, errorReason: "Missing required fields." }, { status: 400 });
   }
-  const { campaignId, sendMode, senderId, messageBody, incentiveText } = body;
+  const { campaignId, sendMode, senderId, messageBody, incentiveText, participantIds } = body;
+  if (sendMode === "selected" && !participantIds?.length) {
+    return NextResponse.json({ ok: false, errorReason: "No participants selected." }, { status: 400 });
+  }
 
   const { data: campaign } = await supabase
     .from("campaigns")
@@ -57,15 +62,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, errorReason: "This campaign isn't active — new invitations can't be sent." }, { status: 400 });
   }
 
-  const { data: participants, error: participantsError } = await supabase
+  let participantsQuery = supabase
     .from("campaign_participants")
-    .select("id, contact_id")
-    .eq("campaign_id", campaignId)
-    .eq("participation_status", sendMode === "new" ? "imported" : "invite_failed");
+    .select("id, contact_id, participation_status")
+    .eq("campaign_id", campaignId);
+  if (sendMode === "new") participantsQuery = participantsQuery.eq("participation_status", "imported");
+  else if (sendMode === "failed") participantsQuery = participantsQuery.eq("participation_status", "invite_failed");
+  else if (sendMode === "selected") participantsQuery = participantsQuery.in("id", participantIds ?? []);
+  else {
+    // clicked_unbooked: opened their link but never booked (or already
+    // finished/declined/ruled out) — narrowed below.
+    participantsQuery = participantsQuery.not("participation_status", "in", "(imported,invite_failed,scheduled,completed,declined,ineligible)");
+  }
+  const { data: candidates, error: participantsError } = await participantsQuery;
   if (participantsError) {
     return NextResponse.json({ ok: false, errorReason: participantsError.message }, { status: 400 });
   }
-  const eligible = participants ?? [];
+  let eligible = candidates ?? [];
+  if (sendMode === "clicked_unbooked") {
+    const [{ data: clicks }, { data: bookings }] = await Promise.all([
+      supabase.from("campaign_invitations").select("participant_id").eq("campaign_id", campaignId).not("clicked_at", "is", null),
+      supabase
+        .from("interview_bookings")
+        .select("participant_id")
+        .eq("campaign_id", campaignId)
+        .eq("is_current", true)
+        .in("status", ["scheduled", "rescheduled"]),
+    ]);
+    const clicked = new Set((clicks ?? []).map((c) => c.participant_id));
+    const booked = new Set((bookings ?? []).map((b) => b.participant_id));
+    eligible = eligible.filter((p) => clicked.has(p.id) && !booked.has(p.id));
+  }
   if (eligible.length === 0) {
     return NextResponse.json({ ok: false, errorReason: "No eligible participants to send to." }, { status: 400 });
   }
@@ -105,6 +132,9 @@ export async function POST(request: Request) {
     let sentCount = 0;
 
     async function sendOne(participant: { id: string; contact_id: string }) {
+      // Only first-time / failed-retry sends move a participant's status;
+      // reminders and targeted resends must never clobber e.g. "scheduled".
+      const movesStatus = sendMode === "new" || sendMode === "failed";
       const phone = phoneByContactId.get(participant.contact_id);
       if (!phone) return;
 
@@ -148,10 +178,12 @@ export async function POST(request: Request) {
         })
         .eq("id", invitationRow.id);
 
-      await supabase
-        .from("campaign_participants")
-        .update({ participation_status: sendResult.ok ? "invited" : "invite_failed" })
-        .eq("id", participant.id);
+      if (movesStatus) {
+        await supabase
+          .from("campaign_participants")
+          .update({ participation_status: sendResult.ok ? "invited" : "invite_failed" })
+          .eq("id", participant.id);
+      }
 
       await supabase.from("audit_events").insert({
         organisation_id: organisationId,
