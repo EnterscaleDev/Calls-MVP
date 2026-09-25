@@ -125,10 +125,18 @@ export async function POST(request: Request) {
         .eq("id", invitationId)
         .maybeSingle();
       if (invitation) {
+        // Only ever move a participant forward from the first-invite states —
+        // a delivery report for a reminder or resend must not overwrite
+        // someone who has since consented, booked, or finished (and a failed
+        // reminder must not demote someone already "delivered").
         await supabase
           .from("campaign_participants")
           .update({ participation_status: appStatus === "delivered" ? "delivered" : "invite_failed" })
-          .eq("id", invitation.participant_id);
+          .eq("id", invitation.participant_id)
+          .in(
+            "participation_status",
+            appStatus === "delivered" ? ["imported", "invited", "invite_failed"] : ["imported", "invited"]
+          );
       }
     }
   } else if (reminderId && (appStatus === "delivered" || appStatus === "failed")) {
