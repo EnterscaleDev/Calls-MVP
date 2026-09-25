@@ -160,8 +160,8 @@ export default function InviteAcceptPage() {
       {phase === "invalid_link" && (
         <div className="pub-card">
           <div className="pub-body" style={{ paddingTop: 26 }}>
-            <h3 style={{ fontSize: 19, marginBottom: 8 }}>This invitation link isn&apos;t valid</h3>
-            <p style={{ marginBottom: 0 }}>Double-check the link from your email, or ask your administrator to send a new invitation.</p>
+            <h3 style={{ fontSize: 19, marginBottom: 8 }}>This invitation link has already been used or has expired</h3>
+            <p style={{ marginBottom: 0 }}>Invitation links only work once, so refreshing this page or opening the link again won&apos;t work. Ask your administrator to send you a new invitation, then open it once and finish setting up your account in the same tab.</p>
           </div>
         </div>
       )}
