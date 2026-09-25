@@ -43,7 +43,7 @@ export interface BridgeCallInput {
 }
 
 export type BridgeCallResult =
-  | { ok: true }
+  | { ok: true; voiceResponseIds: number[] }
   | { ok: false; errorReason: string };
 
 function toSmsalaPhone(e164: string): string {
@@ -92,9 +92,8 @@ export async function bridgeCall(input: BridgeCallInput): Promise<BridgeCallResu
     return { ok: false, errorReason: `SMSala returned a non-JSON response (HTTP ${response.status})` };
   }
 
-  const result = (Array.isArray(data) ? data[0] : data) as
-    | { CallSubmitted?: boolean; Remarks?: string }
-    | undefined;
+  const legs = (Array.isArray(data) ? data : [data]) as { VoiceResponseId?: number; CallSubmitted?: boolean; Remarks?: string }[];
+  const result = legs[0];
 
   if (!response.ok || !result?.CallSubmitted) {
     return {
@@ -103,7 +102,10 @@ export async function bridgeCall(input: BridgeCallInput): Promise<BridgeCallResu
     };
   }
 
-  return { ok: true };
+  return {
+    ok: true,
+    voiceResponseIds: legs.map((l) => l.VoiceResponseId).filter((id): id is number => typeof id === "number"),
+  };
 }
 
 export type SmsalaBalanceResult =

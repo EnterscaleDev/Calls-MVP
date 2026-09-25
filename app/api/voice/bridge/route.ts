@@ -93,5 +93,14 @@ export async function POST(request: Request) {
     callbackUrl,
   });
 
+  // Keep SMSala's own per-leg ids on the attempt so a call can be looked up
+  // on their side when a leg doesn't connect.
+  if (result.ok) {
+    await service
+      .from("call_attempts")
+      .update({ provider_call_id: result.voiceResponseIds.join(",") })
+      .eq("id", body.clientUniqueId);
+  }
+
   return NextResponse.json(result, { status: result.ok ? 200 : 502 });
 }
