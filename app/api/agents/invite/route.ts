@@ -33,13 +33,19 @@ export async function POST(request: Request) {
   if (!body?.name?.trim() || !body.email?.trim()) {
     return NextResponse.json({ ok: false, errorReason: "Name and email are required." }, { status: 400 });
   }
+  if (!/^\+\d{10,15}$/.test((body.phone ?? "").replace(/[\s()-]/g, ""))) {
+    return NextResponse.json(
+      { ok: false, errorReason: "A phone number with country code is required (e.g. +2348012345678)." },
+      { status: 400 }
+    );
+  }
 
   const { data: inviteRows, error: rpcError } = await supabase.rpc("admin_invite_agent", {
     p_name: body.name.trim(),
     p_email: body.email.trim(),
     p_campaign_ids: body.campaignIds ?? [],
     p_daily_target: body.dailyTarget ?? 8,
-    p_phone: body.phone?.trim() ?? "",
+    p_phone: (body.phone ?? "").replace(/[\s()-]/g, ""),
   });
   if (rpcError || !inviteRows?.[0]) {
     return NextResponse.json({ ok: false, errorReason: rpcError?.message ?? "Couldn't create the invitation." }, { status: 400 });

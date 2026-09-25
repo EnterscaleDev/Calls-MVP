@@ -17,6 +17,7 @@ export function InviteAgentModal({
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [camps, setCamps] = useState<string[]>([]);
   const [target, setTarget] = useState("8");
   const [sending, setSending] = useState(false);
@@ -26,6 +27,7 @@ export function InviteAgentModal({
   const reset = () => {
     setName("");
     setEmail("");
+    setPhone("");
     setCamps([]);
     setTarget("8");
     setError("");
@@ -38,7 +40,11 @@ export function InviteAgentModal({
       : email && db.agentInvitations.some((i) => i.email.toLowerCase() === email.toLowerCase() && i.status === "pending")
         ? "pending"
         : null;
-  const canSend = name.trim() && emailOk && !dup;
+  // Agents are called on this number first, so it has to be a real
+  // international number — spaces/dashes are fine, they're stripped.
+  const phoneClean = phone.replace(/[\s()-]/g, "");
+  const phoneOk = /^\+\d{10,15}$/.test(phoneClean);
+  const canSend = name.trim() && emailOk && phoneOk && !dup;
 
   async function send() {
     setSending(true);
@@ -49,6 +55,7 @@ export function InviteAgentModal({
       body: JSON.stringify({
         name: name.trim(),
         email: email.trim(),
+        phone: phoneClean,
         campaignIds: camps,
         dailyTarget: camps.length ? Number(target) || 0 : 8,
       }),
@@ -103,6 +110,9 @@ export function InviteAgentModal({
       <Field l="Email address">
         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ada@example.com" />
       </Field>
+      <Field l="Phone number" hint="The number we ring first when this Agent starts a call. Include the country code, e.g. +2348012345678.">
+        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+2348012345678" />
+      </Field>
       {dup ? (
         <div style={{ marginBottom: 12 }}>
           <Note tone="i">{dup === "already an Agent" ? (first || "This person") + " is already an Agent." : "An invitation is already pending for this email."}</Note>
@@ -137,6 +147,7 @@ export function InviteAgentModal({
           Inviting: <b>{name || "—"}</b>
         </div>
         <div className="dim">{email || "—"}</div>
+        <div className="dim">{phoneClean || "—"}</div>
         <div style={{ marginTop: 6 }}>
           Campaigns: {camps.length ? camps.map((k) => db.campaigns.find((c) => c.id === k)?.name).join(", ") : "None yet"}
         </div>
