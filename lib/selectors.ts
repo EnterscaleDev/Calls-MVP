@@ -125,15 +125,12 @@ export function getAvailableSlots(
   while (slots.length < count * hours.length && dayOffset < 15) {
     const day = new Date(now);
     day.setDate(day.getDate() + dayOffset);
-    const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-    if (!isWeekend) {
-      for (const h of hours) {
-        const start = new Date(day);
-        start.setHours(h, 0, 0, 0);
-        if (start > now) {
-          const end = new Date(start.getTime() + campaign.estimatedDurationMinutes * 60000);
-          slots.push({ start, end });
-        }
+    for (const h of hours) {
+      const start = new Date(day);
+      start.setHours(h, 0, 0, 0);
+      if (start > now) {
+        const end = new Date(start.getTime() + campaign.estimatedDurationMinutes * 60000);
+        slots.push({ start, end });
       }
     }
     dayOffset += 1;
