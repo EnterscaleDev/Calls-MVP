@@ -49,6 +49,20 @@ export default function InviteAcceptPage() {
     let cancelled = false;
     async function run() {
       const supabase = createClient();
+
+      // Supabase invite/recovery emails put the session tokens in the URL
+      // hash (implicit flow), but this browser client runs in PKCE mode, and
+      // supabase-js refuses to auto-detect an implicit-flow URL on a PKCE
+      // client — so the session is never created and every fresh link looked
+      // "invalid". Read the tokens ourselves instead.
+      const linkParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const accessToken = linkParams.get("access_token");
+      const refreshToken = linkParams.get("refresh_token");
+      if (accessToken && refreshToken) {
+        await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
