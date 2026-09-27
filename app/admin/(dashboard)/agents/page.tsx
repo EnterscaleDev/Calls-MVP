@@ -258,7 +258,16 @@ export default function AgentsPage() {
             ) : (
               <Table
                 scroll
-                head={["Agent", "Status", "Assigned campaigns", { l: "Daily target", num: true }, { l: "Calls today", num: true }, "Last active", ""]}
+                head={[
+                  "Agent",
+                  "Status",
+                  "Assigned campaigns",
+                  { l: "Daily target", num: true },
+                  { l: "Calls today", num: true },
+                  { l: "Completed this week", num: true },
+                  "Last active",
+                  "",
+                ]}
               >
                 {rows.map((r) => (
                   <tr key={r.agentId}>
@@ -283,6 +292,7 @@ export default function AgentsPage() {
                     <td className="dim">{r.campaignNames.length ? r.campaignNames.join(", ") : <span className="xs">None yet</span>}</td>
                     <td className="num mono">{r.target || <span className="xs">—</span>}</td>
                     <td className="num mono">{r.today}</td>
+                    <td className="num mono">{r.completedThisWeek}</td>
                     <td className="dim xs" style={{ whiteSpace: "nowrap" }}>
                       {r.last}
                     </td>
