@@ -47,6 +47,18 @@ const IC: Record<string, string> = {
   star: "M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z",
   filter: "M1.8 2.8h12.4L9.5 8.2v5.2l-3-1.8V8.2z",
   split: "M3.4 13.6V6.4a2 2 0 012-2h7.4M10.6 2.2l2.4 2.2-2.4 2.2",
+  // Dialer dock (components/ros/dialer/DialerDock.tsx) — added verbatim from
+  // ros-dialer.jsx's Object.assign(IC, {...}) block, per the dialer spec's
+  // instruction to add these to the existing icon map rather than making a
+  // dialer-specific one.
+  micoff: "M8 2.2a1.9 1.9 0 011.9 1.9v4a1.9 1.9 0 11-3.8 0v-4A1.9 1.9 0 018 2.2zM3.6 7.6a4.4 4.4 0 008.8 0M8 12v2.2M2.4 2.4l11.2 11.2",
+  pause: "M5.4 3v10M10.6 3v10",
+  keys: "M3.2 3.2h1.6v1.6H3.2zM7.2 3.2h1.6v1.6H7.2zM11.2 3.2h1.6v1.6h-1.6zM3.2 7.2h1.6v1.6H3.2zM7.2 7.2h1.6v1.6H7.2zM11.2 7.2h1.6v1.6h-1.6zM3.2 11.2h1.6v1.6H3.2zM7.2 11.2h1.6v1.6H7.2zM11.2 11.2h1.6v1.6h-1.6z",
+  flag: "M3.4 14.2V2.2M3.4 2.8h8.8l-2 3.1 2 3.1H3.4",
+  del: "M5.6 3.4h8v9.2h-8L2 8zM8.2 6.2l3.2 3.6M11.4 6.2L8.2 9.8",
+  min: "M3.5 8h9",
+  eye: "M1.6 8S4 3.6 8 3.6 14.4 8 14.4 8 12 12.4 8 12.4 1.6 8 1.6 8zM8 10a2 2 0 100-4 2 2 0 000 4z",
+  hang: "M1.8 9.6c3.6-3.2 8.8-3.2 12.4 0l-1.6 2-2.6-1V8.8a7.6 7.6 0 00-4 0v1.8l-2.6 1z",
 };
 
 export function Icon({ n, size = 15, style }: { n: string; size?: number; style?: React.CSSProperties }) {

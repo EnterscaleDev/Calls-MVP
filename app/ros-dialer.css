@@ -1,0 +1,74 @@
+/* Ported verbatim from ros-dialer.css (Research Ops Platform v2 prototype's
+ * dialer dock + audit styles). Every token, class, spacing, and color value
+ * below is unchanged from the source — the only edits are: "Space Grotesk"
+ * swapped for var(--font-display) and Barlow swapped for var(--font-barlow)
+ * (a next/font/google Barlow variable added in app/layout.tsx solely for
+ * .dk-key small, the one place this file uses Barlow), matching the same
+ * edit pattern used for app/ros.css. Every class is already scoped by its
+ * "dk-" / "tl-" prefix, so nothing here needs a .ros-root wrapper — same as
+ * the rest of app/ros.css's class-based rules. */
+
+.dk-pill{position:fixed;right:22px;bottom:22px;z-index:90;display:inline-flex;align-items:center;gap:8px;background:var(--navy);color:#fff;border:0;border-radius:8px;padding:11px 16px;font-size:12.5px;font-weight:600;box-shadow:0 10px 30px rgba(25,31,36,.28)}
+.dk-pill:hover{background:var(--navy-2)}
+.dk-pill.warn{background:var(--o)}
+.dk-sep{width:1px;height:14px;background:rgba(255,255,255,.3)}
+.dk{position:fixed;right:22px;bottom:22px;z-index:90;width:340px;max-height:calc(100vh - 44px);background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 18px 50px rgba(25,31,36,.24);display:flex;flex-direction:column;overflow:hidden}
+.dk-h{background:var(--navy);color:#fff;padding:14px 16px;display:flex;align-items:flex-start;gap:10px;justify-content:space-between}
+.dk-h>div:first-child{flex:1;min-width:0}
+.dk-t{font-family:var(--font-display),sans-serif;font-weight:700;font-size:15px;letter-spacing:-.02em}
+.dk-s{font-size:11.5px;color:rgba(255,255,255,.84);margin-top:2px}
+.dk-x{background:none;border:0;color:rgba(255,255,255,.86);padding:4px;border-radius:4px;display:inline-flex}
+.dk-x:hover{background:rgba(255,255,255,.12);color:#fff}
+.dk-x.ink{color:var(--mut)}.dk-x.ink:hover{background:#F1EFEC;color:var(--ink)}
+.dk-link{background:none;border:0;padding:0;color:inherit;text-decoration:underline;text-underline-offset:2px;font-size:inherit;font-weight:600}
+.dk-b{padding:16px;overflow:auto}
+.dk-tabs{display:flex;border-bottom:1px solid var(--line)}
+.dk-tabs button{flex:1;background:none;border:0;border-bottom:2px solid transparent;padding:10px;font-size:12.5px;font-weight:600;color:var(--mut);margin-bottom:-1px}
+.dk-tabs button.on{color:var(--ink);border-bottom-color:var(--o)}
+.dk-tabs .n{font-size:10.5px;color:var(--mut-2);margin-left:5px}
+.dk-pin{width:100%;font:700 26px var(--font-display),sans-serif;letter-spacing:.5em;text-align:center;padding:10px;border:1px solid var(--line);border-radius:6px}
+.dk-num{display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--line);margin-bottom:12px;padding-bottom:6px}
+.dk-num input{border:0!important;outline:0!important;font:700 22px var(--font-display),sans-serif;letter-spacing:-.01em;padding:4px 0;flex:1;min-width:0;background:none;font-variant-numeric:tabular-nums}
+.dk-pad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.dk-key{height:50px;border:1px solid var(--line);background:#fff;border-radius:6px;font:600 19px var(--font-display),sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;color:var(--ink)}
+.dk-key:hover{background:#FBFAF9;border-color:#CFC9C2}
+.dk-key:active{background:var(--o-soft);border-color:var(--o-line)}
+.dk-key small{font:700 8.5px var(--font-barlow),sans-serif;letter-spacing:.14em;color:var(--mut-2)}
+.dk-foot{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--mut-2);margin-top:12px}
+.dk-foot svg{color:var(--navy)}
+.dk-bad{color:var(--red);font-weight:700}
+.dk-rc{padding:11px 16px;border-bottom:1px solid var(--line-2)}
+.dk-player{display:flex;align-items:center;gap:10px;margin-top:8px}.dk-player .bar{flex:1}
+.dk-meter{height:6px;background:#EFEDEA;border-radius:3px;overflow:hidden;margin-top:4px}
+.dk-meter i{display:block;height:100%;background:var(--teal);border-radius:3px;transition:width .12s}
+.dk-meter.dark{background:rgba(255,255,255,.2)}
+.dk-net{display:inline-flex;align-items:flex-end;gap:2px;height:13px}
+.dk-net i{width:3px;background:#DAD5CF;border-radius:1px}.dk-net i.on{background:var(--teal)}
+.dk-net.dark i{background:rgba(255,255,255,.28)}.dk-net.dark i.on{background:#3ED598}
+.dk-live{background:var(--navy);color:#fff;padding:14px 16px 16px}
+.dk-state{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;color:rgba(255,255,255,.88)}
+.dk-who{font-family:var(--font-display),sans-serif;font-size:20px;font-weight:700;letter-spacing:-.02em;margin-top:8px}
+.dk-rec{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:rgba(255,81,0,.18);color:#FFB08A;padding:4px 8px;border-radius:4px}
+.dk-rec .rd{width:7px;height:7px;border-radius:50%;background:var(--o);animation:pulse 1.4s infinite}
+.dk-rec.paused{background:rgba(255,255,255,.12);color:rgba(255,255,255,.86)}.dk-rec.paused .rd{animation:none;background:rgba(255,255,255,.6)}
+.dk-rec.off{background:rgba(255,255,255,.12);color:rgba(255,255,255,.86)}
+.dk-mon{display:flex;align-items:center;gap:7px;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.16);font-size:11.5px;color:#fff}
+.dk-say{background:var(--o-soft);border:1px solid var(--o-line);border-radius:6px;padding:12px 13px;font-size:13px;line-height:1.55;margin:6px 0 12px}
+.dk-chk{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;font-weight:600;cursor:pointer}
+.dk-chk input{margin-top:2px;accent-color:var(--o);width:16px;height:16px;flex:none}
+.dk-ctl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.dk-ctl button{height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border:1px solid var(--line);background:#fff;border-radius:6px;font-size:11.5px;font-weight:600;color:var(--ink)}
+.dk-ctl button:hover{background:#FBFAF9;border-color:#CFC9C2}
+.dk-ctl button.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.dk-ctl button.flagged{background:var(--sand-soft);border-color:#F0DFB8;color:var(--sand)}
+.dk-ctl button.end{background:var(--red);border-color:var(--red);color:#fff}
+.dk-ctl button.end:hover{background:#A83224}
+.dk-dtmf{font:700 20px var(--font-display),sans-serif;letter-spacing:.2em;text-align:center;padding:8px 0 10px}
+.dk-sv{display:flex;align-items:center;gap:10px;width:100%;border:1px solid var(--line);background:#fff;border-radius:6px;padding:8px 10px;font-size:12.5px}
+.dk-sv:hover:not([disabled]){border-color:#CFC9C2;background:#FBFAF9}
+.dk-sv[disabled]{opacity:.55;cursor:not-allowed}
+.tl{border-left:2px solid var(--line);margin:6px 0 0 4px}
+.tl-i{position:relative;padding:0 0 10px 14px}
+.tl-i:before{content:"";position:absolute;left:-6px;top:4px;width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid var(--grey)}
+.tl-i.g:before{border-color:var(--teal)}.tl-i.w:before{border-color:var(--o)}
+@media(max-width:720px){.dk{right:10px;left:10px;bottom:10px;width:auto}.dk-pill{right:10px;bottom:10px}}
